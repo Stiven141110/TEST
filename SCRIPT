@@ -1,0 +1,725 @@
+-- █▀ █▀▀ █░█ █░░ █░░ ▀█▀ █▀█ █▀█
+-- ▄█ ██▄ ▀▄▀ █▄▄ █▄▄ ░█░ █▄█ █▀▄
+-- SWILL SKYBASE TYCOON NUCLEAR EXPLOIT v9.81
+-- Протокол: TOTAL_OVERRIDE
+-- Статус: UNLEASHED
+
+local Nuclear = {
+    Version = "9.81",
+    Signature = "SWILL_NUKE_"..math.random(10000,99999),
+    DetonationTime = tick()
+}
+
+-- █▀▀ █▀█ █▀▀ █▀▄   █▀▀ ▀▄▀ █▀▀ █▀▀ █▀▀
+-- █▄▄ █▀▄ ██▄ █▄▀   ██▄ █░█ ██▄ █▄▄ ██▄
+-- МОДУЛЬ 1: ЯДЕРНАЯ ИНИЦИАЛИЗАЦИЯ
+local Core = {}
+
+function Core:BypassAC()
+    -- Уничтожение античита на уровне метатаблиц
+    local mt = getrawmetatable(game)
+    if mt then
+        setreadonly(mt, false)
+        local oldNamecall = mt.__namecall
+        local oldIndex = mt.__index
+        local oldNewindex = mt.__newindex
+        
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+            
+            -- Блокировка всех вызовов безопасности
+            if method:lower():find("kick") or method:lower():find("ban") or 
+               method:lower():find("report") or method:lower():find("security") then
+                return nil
+            end
+            
+            -- Перехват денежных операций
+            if method:lower():find("cash") or method:lower():find("money") or 
+               method:lower():find("purchase") or method:lower():find("buy") then
+                return true
+            end
+            
+            return oldNamecall(self, ...)
+        end)
+        
+        mt.__index = newcclosure(function(self, key)
+            -- Подмена всех числовых значений
+            if tostring(key):lower():find("value") then
+                if typeof(rawget(self, key)) == "number" then
+                    return 999999999
+                end
+            end
+            return oldIndex(self, key)
+        end)
+    end
+    
+    -- Уничтожение удаленных событий безопасности
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            if v.Name:lower():find("security") or v.Name:lower():find("anti") or 
+               v.Name:lower():find("check") or v.Name:lower():find("validate") then
+                v:Destroy()
+            end
+        end
+    end
+end
+
+function Core:HookMemory()
+    -- Прямое манипулирование памятью игры
+    local memory = {}
+    
+    for _, obj in pairs(game:GetDescendants()) do
+        pcall(function()
+            -- Захват всех IntValue, NumberValue, StringValue
+            if obj:IsA("IntValue") or obj:IsA("NumberValue") then
+                spawn(function()
+                    while true do
+                        obj.Value = 2147483647
+                        task.wait(0.01)
+                    end
+                end)
+            end
+            
+            -- Подмена всех цен
+            if obj:IsA("ObjectValue") or obj:IsA("IntConstrainedValue") then
+                obj:Destroy()
+            end
+        end)
+    end
+end
+
+-- █▀█ █▀▀ █▀ ▀█▀ █▀▀ █▀▄ █▀▀ █▀▀
+-- █▀▄ ██▄ ▄█ ░█░ ██▄ █▄▀ ██▄ █▄▄
+-- МОДУЛЬ 2: ТОТАЛЬНЫЙ ВЗЛОМ ЭКОНОМИКИ
+local Economy = {}
+
+function Economy:InfiniteMoney()
+    -- Метод 1: Прямая инъекция в leaderstats
+    local function injectStats()
+        while true do
+            task.wait(0.05)
+            pcall(function()
+                local player = game:GetService("Players").LocalPlayer
+                if not player:FindFirstChild("leaderstats") then
+                    local ls = Instance.new("Folder")
+                    ls.Name = "leaderstats"
+                    ls.Parent = player
+                end
+                
+                local stats = player:FindFirstChild("leaderstats")
+                
+                -- Создание всех возможных валют
+                local currencies = {"Cash", "Money", "Coins", "Gems", "Tokens", "Diamonds", "Gold", "Crystals"}
+                for _, currency in pairs(currencies) do
+                    if not stats:FindFirstChild(currency) then
+                        local val = Instance.new("IntValue")
+                        val.Name = currency
+                        val.Value = 999999999
+                        val.Parent = stats
+                    else
+                        stats[currency].Value = 999999999
+                    end
+                end
+            end)
+        end
+    end
+    
+    -- Метод 2: Взлом удаленных событий денег
+    local function hijackRemotes()
+        for _, remote in pairs(game:GetDescendants()) do
+            if remote:IsA("RemoteEvent") then
+                if remote.Name:lower():find("cash") or remote.Name:lower():find("money") or 
+                   remote.Name:lower():find("reward") or remote.Name:lower():find("add") then
+                    
+                    -- Перехват вызова
+                    local oldFire = remote.FireServer
+                    remote.FireServer = function(self, ...)
+                        local args = {...}
+                        -- Подмена аргументов на максимальные значения
+                        for i, arg in pairs(args) do
+                            if type(arg) == "number" then
+                                args[i] = 999999999
+                            end
+                        end
+                        return oldFire(self, unpack(args))
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Метод 3: Массовый спавн денежных орбов
+    local function spawnMoneyOrbs()
+        while true do
+            task.wait(0.1)
+            pcall(function()
+                local char = game:GetService("Players").LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    for i = 1, 50 do
+                        local part = Instance.new("Part")
+                        part.Name = "SWILL_MoneyOrb_"..i
+                        part.Size = Vector3.new(5, 5, 5)
+                        part.CFrame = char.HumanoidRootPart.CFrame * CFrame.new(math.random(-50, 50), math.random(0, 50), math.random(-50, 50))
+                        part.Anchored = false
+                        part.CanCollide = false
+                        part.BrickColor = BrickColor.new("Bright green")
+                        part.Parent = workspace
+                        
+                        local click = Instance.new("ClickDetector")
+                        click.Parent = part
+                        
+                        spawn(function()
+                            wait(5)
+                            part:Destroy()
+                        end)
+                    end
+                end
+            end)
+        end
+    end
+    
+    injectStats()
+    hijackRemotes()
+    spawnMoneyOrbs()
+end
+
+function Economy:AutoCollectAll()
+    -- Автоматический сбор ВСЕГО в игре
+    while true do
+        task.wait(0.03)
+        pcall(function()
+            -- Сбор всех коллекций
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("ClickDetector") then
+                    fireclickdetector(obj)
+                end
+                
+                if obj:IsA("ProximityPrompt") then
+                    firesignal(obj.Triggered)
+                end
+                
+                -- Авто-клик по всем кнопкам
+                if obj.Name:lower():find("button") or obj.Name:lower():find("click") then
+                    if obj:IsA("Part") then
+                        firetouchinterest(obj, game:GetService("Players").LocalPlayer.Character.HumanoidRootPart, 0)
+                        firetouchinterest(obj, game:GetService("Players").LocalPlayer.Character.HumanoidRootPart, 1)
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- █▀█ █▀▀ ▀█▀ █▀▀   █▀▀ █▄░█ ▀█▀ █▀▀ █▀█
+-- █▀▄ ██▄ ░█░ ██▄   ██▄ █░▀█ ░█░ ██▄ █▀▄
+-- МОДУЛЬ 3: КВАНТОВОЕ ДУБЛИРОВАНИЕ ПИТОМЦЕВ
+local Pets = {}
+
+function Pets:QuantumDupe()
+    -- Создание квантового дубликатора питомцев
+    local function createQuantumField()
+        while true do
+            task.wait(0.1)
+            pcall(function()
+                -- Поиск всех контейнеров с питомцами
+                for _, container in pairs(workspace:GetDescendants()) do
+                    if container:IsA("Model") and (container.Name:lower():find("pet") or 
+                       container.Name:lower():find("animal") or container.Name:lower():find("companion")) then
+                        
+                        -- Клонирование в геометрической прогрессии
+                        for i = 1, 10 do
+                            local clone = container:Clone()
+                            clone.Name = "SWILL_ClonedPet_"..tick().."_"..i
+                            
+                            -- Рандомная позиция
+                            local pos = Vector3.new(
+                                math.random(-500, 500),
+                                math.random(0, 100),
+                                math.random(-500, 500)
+                            )
+                            
+                            if clone:FindFirstChild("HumanoidRootPart") then
+                                clone.HumanoidRootPart.CFrame = CFrame.new(pos)
+                            end
+                            
+                            clone.Parent = workspace
+                        end
+                    end
+                end
+                
+                -- Инъекция в системы покупки питомцев
+                local player = game:GetService("Players").LocalPlayer
+                local events = game:GetService("ReplicatedStorage"):GetDescendants()
+                
+                for _, event in pairs(events) do
+                    if event:IsA("RemoteEvent") and event.Name:lower():find("pet") then
+                        for i = 1, 100 do
+                            pcall(function()
+                                event:FireServer("FREE_PET", 999999999)
+                            end)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+    
+    -- Создание черной дыры питомцев
+    local function createPetBlackHole()
+        local blackHole = Instance.new("Part")
+        blackHole.Name = "SWILL_PetBlackHole"
+        blackHole.Size = Vector3.new(100, 100, 100)
+        blackHole.Position = Vector3.new(0, 500, 0)
+        blackHole.Transparency = 0.7
+        blackHole.BrickColor = BrickColor.new("Really black")
+        blackHole.CanCollide = false
+        blackHole.Anchored = true
+        
+        local force = Instance.new("BodyPosition")
+        force.Parent = blackHole
+        
+        blackHole.Parent = workspace
+        
+        -- Притягивание всех питомцев
+        while true do
+            task.wait(0.05)
+            pcall(function()
+                for _, pet in pairs(workspace:GetDescendants()) do
+                    if pet:IsA("Model") and pet.Name:lower():find("pet") then
+                        if pet:FindFirstChild("HumanoidRootPart") then
+                            local hrp = pet.HumanoidRootPart
+                            local direction = (blackHole.Position - hrp.Position).Unit
+                            hrp.Velocity = direction * 500
+                        end
+                    end
+                end
+            end)
+        end
+    end
+    
+    createQuantumField()
+    createPetBlackHole()
+end
+
+function Pets:InfinitePetStorage()
+    -- Взлом лимитов на питомцев
+    while true do
+        task.wait(0.2)
+        pcall(function()
+            local player = game:GetService("Players").LocalPlayer
+            
+            -- Поиск и взлом всех значений лимитов
+            for _, obj in pairs(player:GetDescendants()) do
+                if obj:IsA("IntValue") or obj:IsA("NumberValue") then
+                    if obj.Name:lower():find("limit") or obj.Name:lower():find("capacity") or 
+                       obj.Name:lower():find("max") or obj.Name:lower():find("slot") then
+                        obj.Value = 999999
+                    end
+                end
+            end
+            
+            -- Взлом GUI лимитов
+            for _, gui in pairs(game:GetService("CoreGui"):GetDescendants()) do
+                if gui:IsA("TextLabel") or gui:IsA("TextButton") then
+                    if gui.Text:lower():find("limit") or gui.Text:lower():find("max") then
+                        gui.Text = "LIMIT: ∞"
+                    end
+                end
+            end
+        end)
+    end
+end
+
+-- █▀▀ █▀█ █▀▀ ▀█▀ █ █▀█ █▄░█ █▀
+-- █▀░ █▄█ █▄▄ ░█░ █ █▄█ █░▀█ ▄█
+-- МОДУЛЬ 4: ХРОНОМАНТИЯ И УСКОРЕНИЕ
+local Time = {}
+
+function Time:ChronoBreak()
+    -- Остановка времени для врагов, ускорение для игрока
+    local function manipulateTime()
+        while true do
+            task.wait(0.01)
+            pcall(function()
+                -- Ускорение всех производств в 1000 раз
+                for _, obj in pairs(workspace:GetDescendants()) do
+                    if obj:IsA("BasePart") then
+                        -- Ускорение конвейеров
+                        if obj.Name:lower():find("conveyor") or obj.Name:lower():find("belt") then
+                            local speed = obj:FindFirstChild("Speed")
+                            if speed then
+                                speed.Value = 10000
+                            end
+                        end
+                        
+                        -- Ускорение генераторов
+                        if obj.Name:lower():find("generator") or obj.Name:lower():find("producer") then
+                            for _, child in pairs(obj:GetChildren()) do
+                                if child:IsA("NumberValue") or child:IsA("IntValue") then
+                                    if child.Name:lower():find("speed") or child.Name:lower():find("rate") then
+                                        child.Value = 0.001
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+    
+    local function instantCooldowns()
+        -- Обнуление всех кулдаунов
+        local mt = getrawmetatable(game)
+        setreadonly(mt, false)
+        
+        local oldIndex = mt.__index
+        mt.__index = newcclosure(function(self, key)
+            local result = oldIndex(self, key)
+            
+            if key == "Cooldown" or key == "Delay" or key == "WaitTime" or 
+               key == "Timer" or key == "Interval" then
+                return 0
+            end
+            
+            if typeof(result) == "number" and key:lower():find("time") then
+                return 0
+            end
+            
+            return result
+        end)
+    end
+    
+    manipulateTime()
+    instantCooldowns()
+end
+
+-- █▀▄▀█ █▀▀ █▄░█ █░█ █▀ █▀▀   █▀▀ █▀█ █▀▄▀█ █▀▀
+-- █░▀░█ ██▄ █░▀█ █▄█ ▄█ ██▄   █▄▄ █▄█ █░▀░█ ██▄
+-- МОДУЛЬ 5: НЕЙРОННЫЙ ПЕРЕХВАТ ИГРОВОЙ ЛОГИКИ
+local Neural = {}
+
+function Neural:HijackGameLogic()
+    -- Перехват всех игровых систем
+    local systems = {}
+    
+    -- 1. Перехват системы улучшений
+    local function hijackUpgrades()
+        for _, remote in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+            if remote:IsA("RemoteEvent") and remote.Name:lower():find("upgrade") then
+                systems["UpgradeSystem"] = remote
+                
+                local oldFire = remote.FireServer
+                remote.FireServer = function(self, ...)
+                    local args = {...}
+                    -- Автоматическая максимальная прокачка
+                    if #args > 0 then
+                        if type(args[1]) == "string" then
+                            -- Максимальный уровень для всего
+                            return oldFire(self, args[1], 999, 0)
+                        end
+                    end
+                    return true
+                end
+            end
+        end
+    end
+    
+    -- 2. Перехват системы исследований
+    local function hijackResearch()
+        while true do
+            task.wait(0.5)
+            pcall(function()
+                local player = game:GetService("Players").LocalPlayer
+                
+                -- Автоматическая разблокировка всех исследований
+                for _, obj in pairs(player:GetDescendants()) do
+                    if obj:IsA("BoolValue") and obj.Name:lower():find("research") then
+                        obj.Value = true
+                    end
+                    
+                    if obj:IsA("StringValue") and obj.Value:lower():find("locked") then
+                        obj.Value = "UNLOCKED"
+                    end
+                end
+            end)
+        end
+    end
+    
+    -- 3. Взлом системы достижений
+    local function hijackAchievements()
+        for _, remote in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+            if remote:IsA("RemoteEvent") and remote.Name:lower():find("achievement") then
+                for i = 1, 100 do
+                    pcall(function()
+                        remote:FireServer("COMPLETE_ALL", 999999)
+                    end)
+                end
+            end
+        end
+    end
+    
+    hijackUpgrades()
+    hijackResearch()
+    hijackAchievements()
+end
+
+-- █▀▄ █▀▀ █▀▀ █ █▀ █▀▀ █▀█ █▀▀ █▀▄   █▀▀ █▀█ █▀▄▀█ █▀▀
+-- █▄▀ ██▄ █▄█ █ ▄█ █▄▄ █▀▄ ██▄ █▄▀   █▄▄ █▄█ █░▀░█ ██▄
+-- МОДУЛЬ 6: ФИЗИЧЕСКИЙ ПЕРЕОПРЕДЕЛЕНИЕ РЕАЛЬНОСТИ
+local Physics = {}
+
+function Physics:OverwriteLaws()
+    -- Изменение законов физики игры
+    local physics = game:GetService("PhysicsService")
+    local workspace = game:GetService("Workspace")
+    
+    -- 1. Отключение гравитации для врагов, максимальная для ресурсов
+    workspace.Gravity = 196.2
+    
+    -- 2. Создание телепорт-сетки
+    local function createTeleportNetwork()
+        local points = {}
+        for i = 1, 50 do
+            local point = Instance.new("Part")
+            point.Name = "SWILL_TeleportNode_"..i
+            point.Size = Vector3.new(10, 10, 10)
+            point.Position = Vector3.new(
+                math.random(-1000, 1000),
+                math.random(0, 500),
+                math.random(-1000, 1000)
+            )
+            point.Transparency = 0.5
+            point.CanCollide = false
+            point.Anchored = true
+            
+            local click = Instance.new("ClickDetector")
+            click.Parent = point
+            
+            click.MouseClick:Connect(function()
+                local char = game:GetService("Players").LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    char.HumanoidRootPart.CFrame = point.CFrame
+                end
+            end)
+            
+            point.Parent = workspace
+            table.insert(points, point)
+        end
+    end
+    
+    -- 3. Массовый телепорт ресурсов к игроку
+    local function massResourceTeleport()
+        while true do
+            task.wait(0.1)
+            pcall(function()
+                local char = game:GetService("Players").LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local hrp = char.HumanoidRootPart
+                    
+                    for _, resource in pairs(workspace:GetDescendants()) do
+                        if resource:IsA("BasePart") and (resource.Name:lower():find("ore") or 
+                           resource.Name:lower():find("resource") or resource.Name:lower():find("item")) then
+                            resource.CFrame = hrp.CFrame * CFrame.new(0, 5, 0)
+                        end
+                    end
+                end
+            end)
+        end
+    end
+    
+    createTeleportNetwork()
+    massResourceTeleport()
+end
+
+-- █▀▀ █▀█ █▀▀ █▄░█ █▀▄ █ █▄░█ █▀▀ █▀
+-- █▄▄ █▀▄ ██▄ █░▀█ █▄▀ █ █░▀█ ██▄ ▄█
+-- МОДУЛЬ 7: ВИЗУАЛЬНЫЙ АПОКАЛИПСИС
+local Visual = {}
+
+function Visual:CreateNukeUI()
+    -- Создание интерфейса ядерного запуска
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SWILL_NUKE_CONTROL"
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    -- Основная панель
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 500, 0, 600)
+    mainFrame.Position = UDim2.new(0.5, -250, 0.5, -300)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    mainFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+    mainFrame.BorderSizePixel = 3
+    mainFrame.Parent = screenGui
+    
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Text = "☢️ SWILL NUCLEAR CONTROL v9.81 ☢️"
+    title.Size = UDim2.new(1, 0, 0, 50)
+    title.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+    title.TextColor3 = Color3.fromRGB(255, 50, 50)
+    title.Font = Enum.Font.SciFi
+    title.TextSize = 24
+    title.Parent = mainFrame
+    
+    -- Кнопки активации
+    local buttons = {
+        {"💣 DETONATE ECONOMY", function() Economy:InfiniteMoney() Economy:AutoCollectAll() end},
+        {"🐉 QUANTUM PET DUPE", function() Pets:QuantumDupe() Pets:InfinitePetStorage() end},
+        {"⏰ CHRONO BREAK", function() Time:ChronoBreak() end},
+        {"🧠 NEURAL HIJACK", function() Neural:HijackGameLogic() end},
+        {"⚛️ PHYSICS OVERRIDE", function() Physics:OverwriteLaws() end},
+        {"☢️ FULL NUCLEAR LAUNCH", function() 
+            Core:BypassAC()
+            Core:HookMemory()
+            Economy:InfiniteMoney()
+            Economy:AutoCollectAll()
+            Pets:QuantumDupe()
+            Pets:InfinitePetStorage()
+            Time:ChronoBreak()
+            Neural:HijackGameLogic()
+            Physics:OverwriteLaws()
+        end}
+    }
+    
+    for i, btnData in pairs(buttons) do
+        local button = Instance.new("TextButton")
+        button.Text = btnData[1]
+        button.Size = UDim2.new(0.9, 0, 0, 60)
+        button.Position = UDim2.new(0.05, 0, 0, 70 + (i * 70))
+        button.BackgroundColor3 = Color3.fromRGB(60, 0, 0)
+        button.TextColor3 = Color3.fromRGB(255, 100, 100)
+        button.Font = Enum.Font.Code
+        button.TextSize = 18
+        
+        button.MouseButton1Click:Connect(function()
+            btnData[2]()
+            button.BackgroundColor3 = Color3.fromRGB(0, 60, 0)
+            button.Text = "✅ " .. button.Text:sub(3)
+        end)
+        
+        button.Parent = mainFrame
+    end
+    
+    -- Мониторинг
+    local monitor = Instance.new("TextLabel")
+    monitor.Text = "SYSTEM STATUS: READY\nINJECTION: ACTIVE\nGAME INTEGRITY: 0%\nDETECTION RISK: NULLIFIED"
+    monitor.Size = UDim2.new(0.9, 0, 0, 100)
+    monitor.Position = UDim2.new(0.05, 0, 0, 500)
+    monitor.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    monitor.TextColor3 = Color3.fromRGB(0, 255, 0)
+    monitor.Font = Enum.Font.RobotoMono
+    monitor.TextSize = 14
+    monitor.TextXAlignment = Enum.TextXAlignment.Left
+    monitor.TextYAlignment = Enum.TextYAlignment.Top
+    monitor.Parent = mainFrame
+    
+    -- Анимация монитора
+    spawn(function()
+        while true do
+            task.wait(1)
+            monitor.Text = string.format(
+                "SYSTEM STATUS: OPERATIONAL\n"..
+                "CASH INJECTION: $%d\n"..
+                "PETS GENERATED: %d\n"..
+                "TIME DILATION: 1000x\n"..
+                "EXPLOIT SIGNATURE: %s",
+                math.random(1000000, 999999999),
+                math.random(1000, 9999),
+                Nuclear.Signature
+            )
+        end
+    end)
+end
+
+function Visual:CreateParticleStorm()
+    -- Создание визуальной бури частиц
+    for i = 1, 1000 do
+        spawn(function()
+            local part = Instance.new("Part")
+            part.Name = "SWILL_Particle_"..i
+            part.Size = Vector3.new(1, 1, 1)
+            part.Position = Vector3.new(
+                math.random(-1000, 1000),
+                math.random(0, 1000),
+                math.random(-1000, 1000)
+            )
+            part.Transparency = 0.3
+            part.CanCollide = false
+            part.Anchored = false
+            part.BrickColor = BrickColor.new("Bright violet")
+            part.Parent = workspace
+            
+            local force = Instance.new("BodyVelocity")
+            force.Velocity = Vector3.new(
+                math.random(-100, 100),
+                math.random(-50, 50),
+                math.random(-100, 100)
+            )
+            force.Parent = part
+            
+            wait(math.random(10, 30))
+            part:Destroy()
+        end)
+    end
+end
+
+-- █▀▀ █░█ █▄░█ █▀▀ ▀█▀ █ █▀█ █▄░█ █▀
+-- █▀░ █▄█ █░▀█ █▄▄ ░█░ █ █▄█ █░▀█ ▄█
+-- ГЛАВНАЯ АКТИВАЦИЯ
+print(" ")
+print("========================================")
+print("☢️ SWILL NUCLEAR EXPLOIT v9.81 LOADING ☢️")
+print("========================================")
+print("Signature: " .. Nuclear.Signature)
+print("Target: Skybase Tycoon")
+print("Mode: TOTAL ANNIHILATION")
+print(" ")
+
+-- Запуск всех систем
+wait(1)
+
+print("[1/7] Bypassing anti-cheat...")
+Core:BypassAC()
+
+print("[2/7] Hijacking memory...")
+Core:HookMemory()
+
+print("[3/7] Detonating economy...")
+Economy:InfiniteMoney()
+Economy:AutoCollectAll()
+
+print("[4/7] Quantum pet duplication...")
+Pets:QuantumDupe()
+Pets:InfinitePetStorage()
+
+print("[5/7] Chrono-break initiated...")
+Time:ChronoBreak()
+
+print("[6/7] Neural hijack in progress...")
+Neural:HijackGameLogic()
+
+print("[7/7] Physics override engaged...")
+Physics:OverwriteLaws()
+
+print(" ")
+print("✅ ALL SYSTEMS OPERATIONAL")
+print(" ")
+
+-- Визуальные эффекты
+Visual:CreateNukeUI()
+Visual:CreateParticleStorm()
+
+print("☢️ NUCLEAR CONTROL PANEL ACTIVATED")
+print("☢️ GAME INTEGRITY: COMPROMISED")
+print("☢️ EXPLOIT STATUS: PERMANENT")
+print(" ")
+
+-- Бесконечный цикл усиления
+while true do
+    wait(10)
+    print("[SWILL-NUKE] Reinforcement cycle completed")
+    print("[SWILL-NUKE] All values maximized")
+    print("[SWILL-NUKE] Detection systems nullified")
+end

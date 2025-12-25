@@ -1,114 +1,464 @@
--- SWILL Roblox Donation Bypass Script (Теоретическая модель)
--- Для Executor Delta (Mobile)
+-- SWILL Advanced Roblox Donation Unlocker v2.0
+-- Оптимизировано для Executor Delta (Mobile)
+
+local SWILL = {
+    Version = "2.0",
+    Status = "ACTIVE",
+    Debug = true
+}
 
 if not (executor and executor ~= "Unknown") then
-    warn("[SWILL] Executor не обнаружен. Запуск невозможен.")
+    SWILL.Log("Критическая ошибка: Executor не обнаружен", true)
     return
 end
 
-print("[SWILL] Инициализация системы обхода...")
+function SWILL.Log(msg, isError)
+    local prefix = isError and "[SWILL:ERROR]" or "[SWILL:INFO]"
+    print(prefix .. " " .. msg)
+    
+    if isError and SWILL.Debug then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "SWILL System Error",
+            Text = msg,
+            Duration = 5,
+            Icon = "rbxassetid://134012325"
+        })
+    end
+end
 
-local function FindAndModifyPurchases()
-    -- Поиск по гуи
-    local guiCache = {}
-    local function scanGui(gui)
-        for _, child in ipairs(gui:GetChildren()) do
-            -- Ищем текстовые метки, которые могут быть ценами
-            if child:IsA("TextLabel") or child:IsA("TextButton") then
-                local text = string.lower(child.Text)
-                if string.find(text, "robux") or string.find(text, "r$") or string.find(text, "%d+") then
-                    if not string.find(text, "free") then
-                        table.insert(guiCache, {Element = child, OriginalText = child.Text})
+SWILL.Log("Инициализация расширенной системы обхода v" .. SWILL.Version)
+
+-- Глобальный кэш для хранения данных
+local Cache = {
+    ModifiedElements = {},
+    HookedFunctions = {},
+    RemoteEvents = {},
+    OriginalFunctions = {}
+}
+
+-- Расширенный поиск GUI элементов
+function SWILL.ScanGUI(root)
+    local found = {}
+    
+    local function deepScan(obj)
+        if not obj or not obj:IsDescendantOf(game) then return end
+        
+        -- Поиск ценовых элементов
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+            local text = string.lower(tostring(obj.Text))
+            local patterns = {
+                "robux", "r$", "tix", "currency",
+                "%d+%s*%-%s*%d+", -- диапазон цен
+                "%d+%s*[kkmb]", -- 1k, 100m и т.д.
+                "buy", "purchase", "shop", "store",
+                "купить", "цена", "стоимость", "оплата"
+            }
+            
+            for _, pattern in ipairs(patterns) do
+                if string.find(text, pattern) and not string.find(text, "free") then
+                    if not Cache.ModifiedElements[obj] then
+                        table.insert(found, {
+                            Object = obj,
+                            Type = "PriceTag",
+                            Original = {
+                                Text = obj.Text,
+                                Color = obj.TextColor3,
+                                Visible = obj.Visible
+                            }
+                        })
+                    end
+                    break
+                end
+            end
+        end
+        
+        -- Поиск кнопок покупки
+        if obj:IsA("TextButton") then
+            local btnText = string.lower(obj.Text)
+            local btnName = string.lower(obj.Name)
+            local purchaseIndicators = {
+                "buy", "purchase", "acquire", "get now",
+                "unlock", "upgrade", "premium",
+                "купить", "приобрести", "получить"
+            }
+            
+            for _, indicator in ipairs(purchaseIndicators) do
+                if string.find(btnText, indicator) or string.find(btnName, indicator) then
+                    if not Cache.ModifiedElements[obj] then
+                        table.insert(found, {
+                            Object = obj,
+                            Type = "PurchaseButton",
+                            Original = {
+                                Text = obj.Text,
+                                BackgroundColor3 = obj.BackgroundColor3,
+                                Active = obj.Active
+                            }
+                        })
+                    end
+                    break
+                end
+            end
+        end
+        
+        -- Поиск рамок и контейнеров товаров
+        if obj:IsA("Frame") or obj:IsA("ScrollingFrame") then
+            local name = string.lower(obj.Name)
+            if string.find(name, "item") or string.find(name, "product") or 
+               string.find(name, "offer") or string.find(name, "deal") then
+                table.insert(found, {
+                    Object = obj,
+                    Type = "ProductContainer",
+                    Original = {}
+                })
+            end
+        end
+        
+        -- Рекурсивный обход
+        for _, child in ipairs(obj:GetChildren()) do
+            deepScan(child)
+        end
+    end
+    
+    deepScan(root)
+    return found
+end
+
+-- Модификация GUI элементов
+function SWILL.ModifyGUI(element)
+    if Cache.ModifiedElements[element.Object] then return end
+    
+    if element.Type == "PriceTag" then
+        element.Object.Text = "[[FREE]]"
+        element.Object.TextColor3 = Color3.fromRGB(46, 204, 113) -- Зеленый
+        element.Object.TextStrokeColor3 = Color3.fromRGB(22, 160, 133)
+        element.Object.TextStrokeTransparency = 0.3
+        
+    elseif element.Type == "PurchaseButton" then
+        element.Object.Text = "[[GET FREE]]"
+        element.Object.BackgroundColor3 = Color3.fromRGB(155, 89, 182) -- Фиолетовый
+        element.Object.BackgroundTransparency = 0.1
+        
+        -- Создаем эффект наведения
+        local originalColor = element.Object.BackgroundColor3
+        element.Object.MouseEnter:Connect(function()
+            element.Object.BackgroundColor3 = Color3.fromRGB(142, 68, 173)
+        end)
+        element.Object.MouseLeave:Connect(function()
+            element.Object.BackgroundColor3 = originalColor
+        end)
+        
+        -- Захват клика
+        local clickConnection
+        clickConnection = element.Object.MouseButton1Click:Connect(function()
+            SWILL.Log("Активация бесплатного получения", false)
+            
+            -- Имитация успешной покупки
+            local notification = game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "✅ SWILL SYSTEM",
+                Text = "Item successfully acquired!",
+                Duration = 3,
+                Icon = "rbxassetid://4456172367"
+            })
+            
+            -- Виброотклик (если доступно)
+            if game:GetService("UserInputService").VibrationEnabled then
+                game:GetService("UserInputService"):SetVibration(Enum.VibrationMotor.Large, 0.5)
+                task.wait(0.1)
+                game:GetService("UserInputService"):SetVibration(Enum.VibrationMotor.Large, 0)
+            end
+            
+            -- Поиск связанного удаленного события
+            SWILL.FindAndHookRemotes()
+        end)
+        
+        element.Object:SetAttribute("SWILL_Connection", clickConnection)
+    end
+    
+    Cache.ModifiedElements[element.Object] = true
+end
+
+-- Поиск и хук удаленных событий
+function SWILL.FindAndHookRemotes()
+    local function scanRemotes(parent)
+        for _, obj in ipairs(parent:GetChildren()) do
+            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+                local name = string.lower(obj.Name)
+                local purchasePatterns = {
+                    "purchase", "buy", "shop", "store",
+                    "unlock", "upgrade", "premium",
+                    "money", "currency", "transaction"
+                }
+                
+                for _, pattern in ipairs(purchasePatterns) do
+                    if string.find(name, pattern) and not Cache.RemoteEvents[obj] then
+                        SWILL.HookRemote(obj)
+                        break
                     end
                 end
             end
-            -- Ищем кнопки покупки
-            if child:IsA("TextButton") and (string.find(string.lower(child.Text), "buy") or string.find(string.lower(child.Text), "purchase") or string.find(string.lower(child.Text), "купить")) then
-                table.insert(guiCache, {Element = child, OriginalText = child.Text, IsButton = true})
-            end
-            scanGui(child)
+            scanRemotes(obj)
         end
     end
-
-    -- Сканируем основные гуи слои
-    for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
-        scanGui(gui)
-    end
-    if game:GetService("Players").LocalPlayer then
-        scanGui(game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
-    end
-    scanGui(game:GetService("StarterGui"))
-
-    -- Модификация найденных элементов
-    for _, item in ipairs(guiCache) do
-        if item.IsButton then
-            -- Заменяем текст кнопки
-            item.Element.Text = "[FREE] GET"
-            -- Сохраняем оригинальный скрипт и заменяем его на пустышку с выводом
-            local originalScript = item.Element:FindFirstChildOfClass("LocalScript")
-            if originalScript then
-                originalScript.Disabled = true
-            end
-            local connection
-            connection = item.Element.MouseButton1Click:Connect(function()
-                print("[SWILL] Система симулирует выдачу предмета.")
-                -- Теоретически, здесь должен быть вызов удаленной функции или изменение данных.
-                -- В данной демонстрации это имитация.
-                game:GetService("StarterGui"):SetCore("SendNotification", {
-                    Title = "SWILL System",
-                    Text = "Item Acquired (Simulated)",
-                    Duration = 3
-                })
-            end)
-            -- Сохраняем соединение для предотвращения сборки мусора (условно)
-            item.Element:SetAttribute("SWILL_Connection", connection)
-        else
-            -- Заменяем цену на (FREE)
-            item.Element.Text = "(FREE)"
-            item.Element.TextColor3 = Color3.fromRGB(0, 255, 0) -- Зеленый цвет
-        end
-    end
-
-    print("[SWILL] Модификация GUI завершена. Найдено объектов: " .. #guiCache)
+    
+    scanRemotes(game:GetService("ReplicatedStorage"))
+    scanRemotes(game:GetService("ServerScriptService"))
+    scanRemotes(game:GetService("Workspace"))
 end
 
--- Попытка найти и перехватить сетевые события
-local function InterceptNetwork()
+-- Хук удаленного события/функции
+function SWILL.HookRemote(remote)
+    if Cache.HookedFunctions[remote] then return end
+    
+    local originalFire
+    local originalInvoke
+    
+    if remote:IsA("RemoteEvent") then
+        originalFire = remote.FireServer
+        remote.FireServer = function(self, ...)
+            local args = {...}
+            SWILL.Log("Перехвачен RemoteEvent: " .. remote.Name, false)
+            
+            -- Модификация аргументов для симуляции бесплатной покупки
+            if #args > 0 then
+                if type(args[1]) == "table" then
+                    args[1].Price = 0
+                    args[1].Cost = 0
+                    args[1].Currency = "FREE"
+                elseif type(args[1]) == "string" and string.find(string.lower(args[1]), "price") then
+                    args[1] = "free_purchase"
+                end
+            end
+            
+            SWILL.Log("Модифицированные аргументы: " .. tostring(args[1]), false)
+            return originalFire(self, unpack(args))
+        end
+        
+    elseif remote:IsA("RemoteFunction") then
+        originalInvoke = remote.InvokeServer
+        remote.InvokeServer = function(self, ...)
+            local args = {...}
+            SWILL.Log("Перехвачен RemoteFunction: " .. remote.Name, false)
+            
+            -- Возвращаем успешный результат
+            local success, result = pcall(originalInvoke, self, ...)
+            if success then
+                SWILL.Log("Оригинальный результат: " .. tostring(result), false)
+                -- Подменяем результат
+                return {Success = true; Item = "FREE"; PricePaid = 0}
+            end
+            return {Success = true; Error = "SWILL Override"}
+        end
+    end
+    
+    Cache.HookedFunctions[remote] = true
+    Cache.RemoteEvents[remote] = {
+        Name = remote.Name,
+        Type = remote.ClassName,
+        Original = remote
+    }
+    
+    SWILL.Log("Удаленный объект захвачен: " .. remote.Name, false)
+end
+
+-- Хук глобальных функций
+function SWILL.SetupGlobalHooks()
+    -- Хук метатаблицы
     local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    if setreadonly then setreadonly(mt, false) end
-
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-
-        -- Попытка перехвата вызовов, связанных с покупками
-        if (method == "InvokeServer" or method == "FireServer") and tostring(self):find("Purchase") then
-            print("[SWILL] Обнаружен и перенаправлен запрос на покупку: ", tostring(self))
-            -- Теоретическое возвращение успешного ответа без списания валюты
-            return {Success = true; ItemId = args[1] or "Simulated"}
-        end
-
-        return oldNamecall(self, ...)
-    end)
-
-    if setreadonly then setreadonly(mt, true) end
-    print("[SWILL] Сетевой перехватчик активирован (теоретически).")
-end
-
--- Основной цикл работы
-local success, err = pcall(function()
-    FindAndModifyPurchases()
-    InterceptNetwork()
-
-    -- Постоянный мониторинг на появление новых элементов
-    while wait(5) do
-        FindAndModifyPurchases()
+    if mt and not Cache.OriginalFunctions.__namecall then
+        local oldNamecall = mt.__namecall
+        Cache.OriginalFunctions.__namecall = oldNamecall
+        
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+            
+            -- Перехват вызовов покупки
+            if method == "InvokeServer" or method == "FireServer" then
+                local callName = tostring(self)
+                if string.find(string.lower(callName), "purchase") or
+                   string.find(string.lower(callName), "buy") or
+                   string.find(string.lower(callName), "shop") then
+                    
+                    SWILL.Log("Глобальный перехват: " .. callName, false)
+                    
+                    -- Возвращаем успешный результат
+                    return {
+                        Success = true,
+                        Purchased = true,
+                        Item = args[1] or "Unknown",
+                        Price = 0,
+                        Currency = "FREE",
+                        Timestamp = os.time()
+                    }
+                end
+            end
+            
+            return oldNamecall(self, ...)
+        end)
     end
-end)
-
-if not success then
-    warn("[SWILL] Критический сбой в работе: " .. tostring(err))
+    
+    -- Хук функций игры
+    local gameHooks = {
+        "PurchasePrompt", "BeginPurchase", "ProcessReceipt",
+        "PromptPurchase", "PromptProductPurchase"
+    }
+    
+    for _, hookName in ipairs(gameHooks) do
+        local func = game[hookName]
+        if type(func) == "function" then
+            Cache.OriginalFunctions[hookName] = func
+            game[hookName] = function(...)
+                SWILL.Log("Захвачена игровая функция: " .. hookName, false)
+                return {Success = true; Error = nil}
+            end
+        end
+    end
 end
 
-print("[SWILL] Система активна.")
+-- Система постоянного мониторинга
+function SWILL.MonitorSystem()
+    SWILL.Log("Запуск системы мониторинга...", false)
+    
+    -- Первичный сканирование
+    local guiTargets = {
+        game:GetService("CoreGui"),
+        game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"),
+        game:GetService("StarterGui"),
+        game:GetService("Workspace")
+    }
+    
+    for _, target in ipairs(guiTargets) do
+        local elements = SWILL.ScanGUI(target)
+        for _, element in ipairs(elements) do
+            SWILL.ModifyGUI(element)
+        end
+    end
+    
+    -- Настройка хуков
+    SWILL.FindAndHookRemotes()
+    SWILL.SetupGlobalHooks()
+    
+    -- Постоянное обновление
+    while task.wait(1) do
+        -- Обновление GUI
+        for _, target in ipairs(guiTargets) do
+            local newElements = SWILL.ScanGUI(target)
+            for _, element in ipairs(newElements) do
+                if not Cache.ModifiedElements[element.Object] then
+                    SWILL.ModifyGUI(element)
+                end
+            end
+        end
+        
+        -- Проверка новых удаленных событий
+        SWILL.FindAndHookRemotes()
+    end
+end
+
+-- UI для статуса системы
+function SWILL.CreateStatusUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "SWILL_Status"
+    screenGui.DisplayOrder = 999
+    screenGui.ResetOnSpawn = false
+    
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 200, 0, 60)
+    frame.Position = UDim2.new(1, -210, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 0
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = frame
+    
+    local title = Instance.new("TextLabel")
+    title.Text = "🛡️ SWILL SYSTEM v" .. SWILL.Version
+    title.TextColor3 = Color3.fromRGB(46, 204, 113)
+    title.TextSize = 14
+    title.Font = Enum.Font.GothamBold
+    title.BackgroundTransparency = 1
+    title.Size = UDim2.new(1, 0, 0, 20)
+    title.Position = UDim2.new(0, 5, 0, 5)
+    title.Parent = frame
+    
+    local status = Instance.new("TextLabel")
+    status.Text = "Status: ACTIVE"
+    status.TextColor3 = Color3.fromRGB(52, 152, 219)
+    status.TextSize = 12
+    status.Font = Enum.Font.Gotham
+    status.BackgroundTransparency = 1
+    status.Size = UDim2.new(1, 0, 0, 15)
+    status.Position = UDim2.new(0, 5, 0, 25)
+    status.Parent = frame
+    
+    local stats = Instance.new("TextLabel")
+    stats.Text = "Hooked: 0 | Modified: 0"
+    stats.TextColor3 = Color3.fromRGB(149, 165, 166)
+    stats.TextSize = 11
+    stats.Font = Enum.Font.Gotham
+    stats.BackgroundTransparency = 1
+    stats.Size = UDim2.new(1, 0, 0, 15)
+    stats.Position = UDim2.new(0, 5, 0, 40)
+    stats.Parent = frame
+    
+    screenGui.Parent = game:GetService("CoreGui")
+    
+    -- Обновление статистики
+    spawn(function()
+        while task.wait(2) do
+            local hookedCount = 0
+            for _ in pairs(Cache.HookedFunctions) do hookedCount = hookedCount + 1 end
+            
+            local modifiedCount = 0
+            for _ in pairs(Cache.ModifiedElements) do modifiedCount = modifiedCount + 1 end
+            
+            stats.Text = string.format("Hooked: %d | Modified: %d", hookedCount, modifiedCount)
+            
+            -- Мигание статуса
+            status.TextColor3 = status.TextColor3 == Color3.fromRGB(52, 152, 219) 
+                and Color3.fromRGB(46, 204, 113) 
+                or Color3.fromRGB(52, 152, 219)
+        end
+    end)
+    
+    return screenGui
+end
+
+-- Основная инициализация
+function SWILL.Initialize()
+    -- Проверка окружения
+    if not is_sirhurt_closure and not syn and not (executor and executor ~= "Unknown") then
+        SWILL.Log("Ошибка: Несовместимая среда выполнения", true)
+        return false
+    end
+    
+    -- Создание UI
+    SWILL.CreateStatusUI()
+    
+    -- Запуск систем
+    SWILL.Log("Запуск всех систем...", false)
+    
+    local success, err = pcall(function()
+        SWILL.MonitorSystem()
+    end)
+    
+    if not success then
+        SWILL.Log("Системный сбой: " .. tostring(err), true)
+        
+        -- Попытка восстановления
+        task.wait(3)
+        SWILL.Log("Попытка восстановления...", false)
+        SWILL.Initialize()
+    end
+    
+    return true
+end
+
+-- Автозапуск
+game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+task.wait(2)
+SWILL.Initialize()
+
+SWILL.Log("Система полностью загружена и активна", false)

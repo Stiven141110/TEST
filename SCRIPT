@@ -1,511 +1,114 @@
-if script_loaded then warn("Script is already loaded, please rejoin the game to load it again.") return end 
-pcall(function() getgenv().script_loaded = true end)
-warn("Loading...")
+-- SWILL Roblox Donation Bypass Script (Теоретическая модель)
+-- Для Executor Delta (Mobile)
 
-local Library = loadstring(game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
-local SaveManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/SaveManager.luau"))()
-local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/InterfaceManager.luau"))()
-
-local w = Library:CreateWindow{
-    Title = "untitled drill game",
-    SubTitle = "by Bac0nH1ckOff",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(830, 525),
-    Resize = true,
-    MinSize = Vector2.new(470, 380),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-}
-
-local Tabs = {
-    Main = w:CreateTab{
-        Title = "Main",
-        Icon = "house"
-    },
-    Farm = w:CreateTab{
-        Title = "Farm",
-        Icon = "tractor"
-    },
-    Settings = w:CreateTab{
-        Title = "Settings",
-        Icon = "settings"
-    }
-}
-
-local Options = Library.Options
-
-local players = game:GetService("Players")
-local plr = players.LocalPlayer
-local sellPart = workspace:FindFirstChild("Scripted") and workspace.Scripted:FindFirstChild("Sell")
-local drillsUi = plr.PlayerGui:FindFirstChild("Menu") and plr.PlayerGui.Menu:FindFirstChild("CanvasGroup") and plr.PlayerGui.Menu.CanvasGroup.Buy
-local handdrillsUi = plr.PlayerGui:FindFirstChild("Menu") and plr.PlayerGui.Menu:FindFirstChild("CanvasGroup") and plr.PlayerGui.Menu.CanvasGroup.HandDrills
-local plot = nil
-
--- // Get Player Plot
-if plr then
-    for _, p in ipairs(workspace.Plots:GetChildren()) do
-        if p:FindFirstChild("Owner") and p.Owner.Value == plr then
-            plot = p
-            break
-        end
-    end
+if not (executor and executor ~= "Unknown") then
+    warn("[SWILL] Executor не обнаружен. Запуск невозможен.")
+    return
 end
 
--- // Sell Logic
-local function sell()
-    if not sellPart or not plr.Character or not plr.Character:FindFirstChild("HumanoidRootPart") then
-        Library:Notify{Title = "Error", Content = "Cannot sell: missing required objects", Duration = 5}
-        return
-    end
-    
-    local wasDrillsUiOpen = drillsUi and drillsUi.Visible or false
-    local wasHandDrillsUiOpen = handdrillsUi and handdrillsUi.Visible or false
+print("[SWILL] Инициализация системы обхода...")
 
-    if drillsUi then drillsUi.Visible = false end
-    if handdrillsUi then handdrillsUi.Visible = false end
-
-    local lastPos = plr.Character.HumanoidRootPart.CFrame
-    plr.Character.HumanoidRootPart.CFrame = sellPart.CFrame
-    task.wait(0.2)
-
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local Knit = require(ReplicatedStorage.Packages:WaitForChild("Knit"))
-    local OreService = Knit.GetService("OreService")
-
-    OreService.SellAll:Fire()
-    task.wait(0.2)
-
-    if lastPos then
-        plr.Character.HumanoidRootPart.CFrame = lastPos
-    end
-
-    if wasDrillsUiOpen and drillsUi then
-        drillsUi.Visible = true
-        Options.drillsUI:SetValue(true)
-    end
-
-    if wasHandDrillsUiOpen and handdrillsUi then
-        handdrillsUi.Visible = true
-        Options.handdrillsUI:SetValue(true)
-    end
-end
-
--- // Player List
-local function updatePlayerList()
-    local playerList = {}
-    for _, v in ipairs(players:GetPlayers()) do
-        if v ~= plr then
-            table.insert(playerList, v.Name)
-        end
-    end
-    Options.players:SetValues(playerList)
-end
-
-players.PlayerAdded:Connect(function()
-    updatePlayerList()
-end)
-
-players.PlayerRemoving:Connect(function()
-    updatePlayerList()
-end)
-
---// Main
-local drillsUI = Tabs.Main:CreateToggle("drillsUI", {Title = "Open Drills UI", Default = false })
-local handdrillsUI = Tabs.Main:CreateToggle("handdrillsUI", {Title = "Open HandDrills UI", Default = false })
-
-drillsUI:OnChanged(function()
-    if Options.drillsUI.Value then
-        Options.handdrillsUI:SetValue(false)
-    end
-    if drillsUi then
-        drillsUi.Visible = Options.drillsUI.Value
-    end
-end)
-
-if drillsUi then
-    drillsUi:GetPropertyChangedSignal("Visible"):Connect(function()
-        if not drillsUi.Visible then
-            Options.drillsUI:SetValue(false)
-        end
-    end)
-end
-
-handdrillsUI:OnChanged(function()
-    if Options.handdrillsUI.Value then
-        Options.drillsUI:SetValue(false)
-    end
-    if handdrillsUi then
-        handdrillsUi.Visible = Options.handdrillsUI.Value
-    end
-end)
-
-if handdrillsUi then
-    handdrillsUi:GetPropertyChangedSignal("Visible"):Connect(function()
-        if not handdrillsUi.Visible then
-            Options.handdrillsUI:SetValue(false)
-        end
-    end)
-end
-
-local chosenPlayer = nil
-local playersDropdown = Tabs.Main:CreateDropdown("players", {
-    Title = "Choose Players",
-    Values = {},
-    Multi = false
-})
-
-playersDropdown:OnChanged(function(Value)
-    chosenPlayer = Value
-end)
-
-updatePlayerList()
-
-Tabs.Main:CreateButton{
-    Title = "Teleport to Player",
-    Description = "Teleport to the selected player",
-    Callback = function()
-        if chosenPlayer then
-            local targetPlayer = players:FindFirstChild(chosenPlayer)
-            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local targetPosition = targetPlayer.Character.HumanoidRootPart.CFrame
-                if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                    plr.Character.HumanoidRootPart.CFrame = targetPosition
-                else
-                    Library:Notify{Title = "Error", Content = "Your character is missing HumanoidRootPart", Duration = 5}
+local function FindAndModifyPurchases()
+    -- Поиск по гуи
+    local guiCache = {}
+    local function scanGui(gui)
+        for _, child in ipairs(gui:GetChildren()) do
+            -- Ищем текстовые метки, которые могут быть ценами
+            if child:IsA("TextLabel") or child:IsA("TextButton") then
+                local text = string.lower(child.Text)
+                if string.find(text, "robux") or string.find(text, "r$") or string.find(text, "%d+") then
+                    if not string.find(text, "free") then
+                        table.insert(guiCache, {Element = child, OriginalText = child.Text})
+                    end
                 end
-            else
-                Library:Notify{Title = "Error", Content = "Target player not found or invalid", Duration = 5}
             end
+            -- Ищем кнопки покупки
+            if child:IsA("TextButton") and (string.find(string.lower(child.Text), "buy") or string.find(string.lower(child.Text), "purchase") or string.find(string.lower(child.Text), "купить")) then
+                table.insert(guiCache, {Element = child, OriginalText = child.Text, IsButton = true})
+            end
+            scanGui(child)
+        end
+    end
+
+    -- Сканируем основные гуи слои
+    for _, gui in ipairs(game:GetService("CoreGui"):GetChildren()) do
+        scanGui(gui)
+    end
+    if game:GetService("Players").LocalPlayer then
+        scanGui(game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"))
+    end
+    scanGui(game:GetService("StarterGui"))
+
+    -- Модификация найденных элементов
+    for _, item in ipairs(guiCache) do
+        if item.IsButton then
+            -- Заменяем текст кнопки
+            item.Element.Text = "[FREE] GET"
+            -- Сохраняем оригинальный скрипт и заменяем его на пустышку с выводом
+            local originalScript = item.Element:FindFirstChildOfClass("LocalScript")
+            if originalScript then
+                originalScript.Disabled = true
+            end
+            local connection
+            connection = item.Element.MouseButton1Click:Connect(function()
+                print("[SWILL] Система симулирует выдачу предмета.")
+                -- Теоретически, здесь должен быть вызов удаленной функции или изменение данных.
+                -- В данной демонстрации это имитация.
+                game:GetService("StarterGui"):SetCore("SendNotification", {
+                    Title = "SWILL System",
+                    Text = "Item Acquired (Simulated)",
+                    Duration = 3
+                })
+            end)
+            -- Сохраняем соединение для предотвращения сборки мусора (условно)
+            item.Element:SetAttribute("SWILL_Connection", connection)
         else
-            Library:Notify{Title = "Error", Content = "No player selected", Duration = 5}
+            -- Заменяем цену на (FREE)
+            item.Element.Text = "(FREE)"
+            item.Element.TextColor3 = Color3.fromRGB(0, 255, 0) -- Зеленый цвет
         end
     end
-}
 
-Tabs.Main:CreateButton{
-    Title = "Teleport to Player Plot",
-    Description = "Teleport to the selected player's plot",
-    Callback = function()
-        if chosenPlayer then
-            local targetPlayer = players:FindFirstChild(chosenPlayer)
-            if targetPlayer then
-                local targetPlot = nil
-                for _, p in ipairs(workspace.Plots:GetChildren()) do
-                    if p:FindFirstChild("Owner") and p.Owner.Value == targetPlayer then
-                        targetPlot = p
-                        break
-                    end
-                end
+    print("[SWILL] Модификация GUI завершена. Найдено объектов: " .. #guiCache)
+end
 
-                if targetPlot and targetPlot:FindFirstChild("PlotSpawn") then
-                    local plotCenter = targetPlot.PlotSpawn.CFrame
-                    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                        plr.Character.HumanoidRootPart.CFrame = plotCenter
-                    else
-                        Library:Notify{Title = "Error", Content = "Your character is missing HumanoidRootPart", Duration = 5}
-                    end
-                else
-                    Library:Notify{Title = "Error", Content = "Target player's plot not found or invalid", Duration = 5}
-                end
-            else
-                Library:Notify{Title = "Error", Content = "Target player not found", Duration = 5}
-            end
-        else
-            Library:Notify{Title = "Error", Content = "No player selected", Duration = 5}
+-- Попытка найти и перехватить сетевые события
+local function InterceptNetwork()
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    if setreadonly then setreadonly(mt, false) end
+
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        local args = {...}
+
+        -- Попытка перехвата вызовов, связанных с покупками
+        if (method == "InvokeServer" or method == "FireServer") and tostring(self):find("Purchase") then
+            print("[SWILL] Обнаружен и перенаправлен запрос на покупку: ", tostring(self))
+            -- Теоретическое возвращение успешного ответа без списания валюты
+            return {Success = true; ItemId = args[1] or "Simulated"}
         end
-    end
-}
 
-Tabs.Main:CreateButton{
-    Title = "Anti AFK",
-    Description = "You won't get kicked in 20 minutes by afk",
-    Callback = function()
-        local virtualUser = game:GetService("VirtualUser")
-        plr.Idled:Connect(function()
-            virtualUser:CaptureController()
-            virtualUser:ClickButton2(Vector2.new())
-        end)
-        Library:Notify{Title = "Success", Content = "Anti-AFK activated!", Duration = 5}
-    end
-}
+        return oldNamecall(self, ...)
+    end)
 
--- // Farm
-local delay = 10
-local autodrill = Tabs.Farm:CreateToggle("autodrill", {Title = "Auto Drill", Default = false })
-local autopickup = Tabs.Farm:CreateToggle("autopickup", {Title = "Auto Drill Pickup", Default = false })
+    if setreadonly then setreadonly(mt, true) end
+    print("[SWILL] Сетевой перехватчик активирован (теоретически).")
+end
 
-Tabs.Farm:CreateButton{ 
-    Title = "Sell All", 
-    Description = "Sell all ores", 
-    Callback = function() 
-        sell() 
-    end 
-}
+-- Основной цикл работы
+local success, err = pcall(function()
+    FindAndModifyPurchases()
+    InterceptNetwork()
 
-Tabs.Farm:CreateInput("selldelay", {
-    Title = "Auto Sell Delay", 
-    Default = tostring(delay), 
-    Placeholder = tostring(delay), 
-    Numeric = true, 
-    Finished = true, 
-    Callback = function(Value)
-        local num = tonumber(Value) 
-        if num and num >= 1 then 
-            delay = num 
-        else 
-            Library:Notify{Title = "Warning", Content = "Only numbers (1+)", Duration = 5} 
-        end 
-    end
-})
-
-local autosell = Tabs.Farm:CreateToggle("autosell", {Title = "Auto Sell", Default = false })
-local autorebirth = Tabs.Farm:CreateToggle("autorebirth", {Title = "Auto Rebirth", Default = false })
-
-Tabs.Farm:CreateParagraph("Paragraph", { Title = "Auto Collect", })
-
-local collectdrills = Tabs.Farm:CreateToggle("collectdrills", {Title = "Auto Collect Drills", Default = false })
-local collectstorages = Tabs.Farm:CreateToggle("collectstorage", {Title = "Auto Collect Storages", Default = false })
-
-Tabs.Farm:CreateParagraph("Paragraph", { Title = "-- Settings --", })
-
-local drillsfull = Tabs.Farm:CreateToggle("drillsfull", {Title = "If drill is full", Default = false })
-local drillsdelay = Tabs.Farm:CreateToggle("drillsdelay", {Title = "In ... seconds", Default = false })
-local delayDrills = 10
-
-Tabs.Farm:CreateInput("collectdrillsdelay", {
-    Title = "Drills Delay", 
-    Default = tostring(delayDrills), 
-    Placeholder = tostring(delayDrills), 
-    Numeric = true, 
-    Finished = true, 
-    Callback = function(Value) 
-        local num = tonumber(Value) 
-        if num and num >= 1 then 
-            delayDrills = num 
-        else 
-            Library:Notify{Title = "Warning", Content = "Only numbers (1+)", Duration = 5} 
-        end 
-    end
-})
-
-local storagesfull = Tabs.Farm:CreateToggle("storagesfull", {Title = "If storage is full", Default = false })
-local storagesdelay = Tabs.Farm:CreateToggle("storagesdelay", {Title = "In ... seconds", Default = false })
-local storDelay = 10
-
-Tabs.Farm:CreateInput("collectstoragesdelay", {
-    Title = "Storages Delay", 
-    Default = tostring(storDelay), 
-    Placeholder = tostring(storDelay), 
-    Numeric = true, 
-    Finished = true, 
-    Callback = function(Value) 
-        local num = tonumber(Value) 
-        if num and num >= 1 then 
-            storDelay = num 
-        else 
-            Library:Notify{Title = "Warning", Content = "Only numbers (1+)", Duration = 5} 
-        end 
-    end
-})
-
--- Автоматические функции
-autopickup:OnChanged(function()
-    if Options.autopickup.Value then
-        task.spawn(function()
-            while Options.autopickup.Value do
-                local hasDrill = false
-                
-                if plr.Character then
-                    for _, obj in pairs(plr.Character:GetChildren()) do
-                        if obj:GetAttribute("Type") == "HandDrill" then
-                            hasDrill = true
-                            break
-                        end
-                    end
-                end
-                
-                if not hasDrill and plr.Backpack then
-                    for _, obj in pairs(plr.Backpack:GetChildren()) do
-                        if obj:GetAttribute("Type") == "HandDrill" then
-                            obj.Parent = plr.Character
-                            break
-                        end
-                    end
-                end
-                
-                task.wait(2)
-            end
-        end)
+    -- Постоянный мониторинг на появление новых элементов
+    while wait(5) do
+        FindAndModifyPurchases()
     end
 end)
 
-autodrill:OnChanged(function()
-    if Options.autodrill.Value then
-        task.spawn(function()
-            while Options.autodrill.Value do
-                local success, result = pcall(function()
-                    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild(
-                        "Services"
-                    ):WaitForChild("OreService"):WaitForChild("RE"):WaitForChild("RequestRandomOre"):FireServer()
-                end)
-                
-                if not success then
-                    warn("Auto drill error:", result)
-                end
-                
-                task.wait(0.01)
-            end
-        end)
-    end
-end)
+if not success then
+    warn("[SWILL] Критический сбой в работе: " .. tostring(err))
+end
 
-autosell:OnChanged(function()
-    if Options.autosell.Value then
-        task.spawn(function()
-            while Options.autosell.Value do
-                sell()
-                task.wait(delay)
-            end
-        end)
-    end
-end)
-
-autorebirth:OnChanged(function()
-    if Options.autorebirth.Value then
-        task.spawn(function()
-            while Options.autorebirth.Value do
-                local success, result = pcall(function()
-                    game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild(
-                        "RebirthService"
-                    ):WaitForChild("RE"):WaitForChild("RebirthRequest"):FireServer()
-                end)
-                
-                if not success then
-                    warn("Auto rebirth error:", result)
-                end
-                
-                task.wait(1)
-            end
-        end)
-    end
-end)
-
-collectdrills:OnChanged(function()
-    if Options.collectdrills.Value then
-        task.spawn(function()
-            while Options.collectdrills.Value do
-                if plot and plot:FindFirstChild("Drills") then
-                    for _, drill in pairs(plot.Drills:GetChildren()) do
-                        if not Options.collectdrills.Value then break end
-
-                        local drillData = drill:FindFirstChild("DrillData")
-                        local ores = drill:FindFirstChild("Ores")
-                        if drillData and ores then
-                            local capacity = drillData:FindFirstChild("Capacity")
-                            if capacity then
-                                local val = 0
-                                for _, ore in pairs(ores:GetChildren()) do
-                                    if ore:IsA("IntValue") or ore:IsA("NumberValue") then
-                                        val = val + ore.Value
-                                    end
-                                end
-                                
-                                local shouldCollect = false
-                                if Options.drillsdelay.Value then
-                                    shouldCollect = true
-                                elseif Options.drillsfull.Value then
-                                    shouldCollect = val >= capacity.Value
-                                else
-                                    shouldCollect = true
-                                end
-                                
-                                if shouldCollect then
-                                    local success, result = pcall(function()
-                                        game:GetService("ReplicatedStorage").Packages.Knit.Services.PlotService.RE.CollectDrill:FireServer(drill)
-                                    end)
-                                    
-                                    if not success then
-                                        warn("Collect drill error:", result)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                task.wait(Options.drillsdelay.Value and delayDrills or 2)
-            end
-        end)
-    end
-end)
-
-collectstorages:OnChanged(function()
-    if Options.collectstorage.Value then
-        task.spawn(function()
-            while Options.collectstorage.Value do
-                if plot and plot:FindFirstChild("Storage") then
-                    for _, storage in pairs(plot.Storage:GetChildren()) do
-                        if not Options.collectstorage.Value then break end
-
-                        local storageData = storage:FindFirstChild("DrillData")
-                        local storageOres = storage:FindFirstChild("Ores")
-                        if storageData and storageOres then
-                            local storageCapacity = storageData:FindFirstChild("Capacity")
-                            if storageCapacity then
-                                local val = 0
-                                for _, ore in pairs(storageOres:GetChildren()) do
-                                    if ore:IsA("IntValue") or ore:IsA("NumberValue") then
-                                        val = val + ore.Value
-                                    end
-                                end
-                                
-                                local shouldCollect = false
-                                if Options.storagesdelay.Value then
-                                    shouldCollect = true
-                                elseif Options.storagesfull.Value then
-                                    shouldCollect = val >= storageCapacity.Value
-                                else
-                                    shouldCollect = true
-                                end
-                                
-                                if shouldCollect then
-                                    local success, result = pcall(function()
-                                        game:GetService("ReplicatedStorage").Packages.Knit.Services.PlotService.RE.CollectStorage:FireServer(storage)
-                                    end)
-                                    
-                                    if not success then
-                                        warn("Collect storage error:", result)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                task.wait(Options.storagesdelay.Value and storDelay or 2)
-            end
-        end)
-    end
-end)
-
--- Настройки менеджеров сохранения и интерфейса
-SaveManager:SetLibrary(Library)
-InterfaceManager:SetLibrary(Library)
-
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-
-InterfaceManager:SetFolder("FluentScriptHub")
-SaveManager:SetFolder("FluentScriptHub/untitled_drill_game")
-
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
-
-SaveManager:Load()
-
-Library:Notify{
-    Title = "Script Loaded",
-    Content = "untitled drill game script has been successfully loaded!",
-    Duration = 5
-}
-
-warn("Script loaded successfully!")
+print("[SWILL] Система активна.")

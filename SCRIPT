@@ -1,8 +1,8 @@
--- SWILL Advanced Roblox Donation Unlocker v2.0
--- Оптимизировано для Executor Delta (Mobile)
+-- SWILL Orb ESP System v1.0
+-- Advanced ESP для Orbs и подобных объектов
 
 local SWILL = {
-    Version = "2.0",
+    Version = "1.0",
     Status = "ACTIVE",
     Debug = true
 }
@@ -18,7 +18,7 @@ function SWILL.Log(msg, isError)
     
     if isError and SWILL.Debug then
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "SWILL System Error",
+            Title = "SWILL ESP System Error",
             Text = msg,
             Duration = 5,
             Icon = "rbxassetid://134012325"
@@ -26,439 +26,591 @@ function SWILL.Log(msg, isError)
     end
 end
 
-SWILL.Log("Инициализация расширенной системы обхода v" .. SWILL.Version)
+SWILL.Log("Инициализация Orb ESP System v" .. SWILL.Version, false)
 
--- Глобальный кэш для хранения данных
-local Cache = {
-    ModifiedElements = {},
-    HookedFunctions = {},
-    RemoteEvents = {},
-    OriginalFunctions = {}
+-- Конфигурация ESP
+local ESP_CONFIG = {
+    Enabled = true,
+    MaxDistance = 5000, -- Максимальная дистанция отрисовки
+    CheckInterval = 0.5, -- Интервал проверки новых объектов
+    RefreshRate = 0.05, -- Частота обновления ESP
+    
+    -- Настройки для Orbs
+    OrbSettings = {
+        BoxColor = Color3.fromRGB(0, 255, 0), -- Зеленый для Orbs
+        TextColor = Color3.fromRGB(255, 255, 255),
+        TracerColor = Color3.fromRGB(255, 255, 0),
+        Thickness = 1,
+        Transparency = 0.7
+    },
+    
+    -- Дополнительные цели для поиска
+    TargetNames = {
+        "Orb", "Orbs", "Orib", "Orb_", "_Orb", 
+        "Coin", "Coins", "Token", "Tokens",
+        "Crystal", "Crystals", "Gem", "Gems",
+        "XP", "Experience", "Drop", "Loot",
+        "Treasure", "Powerup", "Pickup"
+    },
+    
+    -- Типы объектов для поиска
+    TargetClasses = {
+        "Part", "MeshPart", "UnionOperation", "Model",
+        "SphereHandleAdornment", "ClickDetector", "ProximityPrompt"
+    }
 }
 
--- Расширенный поиск GUI элементов
-function SWILL.ScanGUI(root)
+-- Глобальный кэш
+local ESP_CACHE = {
+    Orbs = {},
+    ESPObjects = {},
+    Connections = {},
+    Running = true
+}
+
+-- Утилиты
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Создание ESP элементов
+function SWILL.CreateESP(object, objectType)
+    if not object or not object:IsDescendantOf(workspace) then return nil end
+    if ESP_CACHE.ESPObjects[object] then return ESP_CACHE.ESPObjects[object] end
+    
+    local esp = {
+        Object = object,
+        Type = objectType or "Orb",
+        Main = nil,
+        Label = nil,
+        Tracer = nil,
+        Box = nil,
+        DistanceLabel = nil
+    }
+    
+    -- Основной Adornment для ESP
+    esp.Main = Instance.new("BillboardGui")
+    esp.Main.Name = "SWILL_ESP_" .. object.Name
+    esp.Main.Adornee = object:IsA("Model") and object.PrimaryPart or object
+    esp.Main.Size = UDim2.new(4, 0, 1, 0)
+    esp.Main.StudsOffset = Vector3.new(0, 3, 0)
+    esp.Main.AlwaysOnTop = true
+    esp.Main.MaxDistance = ESP_CONFIG.MaxDistance
+    esp.Main.Enabled = ESP_CONFIG.Enabled
+    
+    -- Фоновая рамка
+    esp.Box = Instance.new("Frame")
+    esp.Box.Name = "Box"
+    esp.Box.Size = UDim2.new(1, 0, 0.3, 0)
+    esp.Box.Position = UDim2.new(0, 0, 0, 0)
+    esp.Box.BackgroundColor3 = ESP_CONFIG.OrbSettings.BoxColor
+    esp.Box.BackgroundTransparency = ESP_CONFIG.OrbSettings.Transparency
+    esp.Box.BorderSizePixel = 0
+    esp.Box.Parent = esp.Main
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 4)
+    corner.Parent = esp.Box
+    
+    -- Метка с названием
+    esp.Label = Instance.new("TextLabel")
+    esp.Label.Name = "Label"
+    esp.Label.Size = UDim2.new(1, 0, 1, 0)
+    esp.Label.Position = UDim2.new(0, 0, 0, 0)
+    esp.Label.BackgroundTransparency = 1
+    esp.Label.TextColor3 = ESP_CONFIG.OrbSettings.TextColor
+    esp.Label.Text = object.Name .. " [" .. objectType .. "]"
+    esp.Label.TextSize = 14
+    esp.Label.Font = Enum.Font.GothamBold
+    esp.Label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    esp.Label.TextStrokeTransparency = 0.3
+    esp.Label.Parent = esp.Main
+    
+    -- Метка расстояния
+    esp.DistanceLabel = Instance.new("TextLabel")
+    esp.DistanceLabel.Name = "DistanceLabel"
+    esp.DistanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    esp.DistanceLabel.Position = UDim2.new(0, 0, 0.3, 0)
+    esp.DistanceLabel.BackgroundTransparency = 1
+    esp.DistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    esp.DistanceLabel.Text = "0 studs"
+    esp.DistanceLabel.TextSize = 11
+    esp.DistanceLabel.Font = Enum.Font.Gotham
+    esp.DistanceLabel.TextStrokeTransparency = 0.4
+    esp.DistanceLabel.Parent = esp.Main
+    
+    -- Линия-трассер к объекту
+    if object:IsA("BasePart") or (object:IsA("Model") and object.PrimaryPart) then
+        esp.Tracer = Instance.new("LineHandleAdornment")
+        esp.Tracer.Name = "SWILL_Tracer"
+        esp.Tracer.Adornee = workspace.Terrain
+        esp.Tracer.Color3 = ESP_CONFIG.OrbSettings.TracerColor
+        esp.Tracer.Thickness = ESP_CONFIG.OrbSettings.Thickness
+        esp.Tracer.Transparency = ESP_CONFIG.OrbSettings.Transparency
+        esp.Tracer.ZIndex = 10
+        esp.Tracer.Visible = false
+        esp.Tracer.Parent = Camera
+    end
+    
+    -- Добавление свечения для Orb
+    if string.find(string.lower(object.Name), "orb") then
+        local glow = Instance.new("PointLight")
+        glow.Name = "SWILL_Glow"
+        glow.Color = ESP_CONFIG.OrbSettings.BoxColor
+        glow.Range = 15
+        glow.Brightness = 1
+        glow.Shadows = false
+        glow.Parent = object:IsA("Model") and object.PrimaryPart or object
+    end
+    
+    esp.Main.Parent = Camera
+    ESP_CACHE.ESPObjects[object] = esp
+    
+    SWILL.Log("ESP создан для: " .. object.Name .. " (" .. objectType .. ")", false)
+    return esp
+end
+
+-- Обновление позиций ESP
+function SWILL.UpdateESP()
+    for obj, esp in pairs(ESP_CACHE.ESPObjects) do
+        if not obj or not obj:IsDescendantOf(workspace) then
+            SWILL.DestroyESP(obj)
+            continue
+        end
+        
+        local character = LocalPlayer.Character
+        local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
+        
+        if esp.Main and esp.Main.Parent then
+            -- Обновление видимости по расстоянию
+            local distance = 9999
+            if humanoidRootPart then
+                local objectPos = obj:IsA("Model") and obj.PrimaryPart and obj.PrimaryPart.Position or obj.Position
+                distance = (humanoidRootPart.Position - objectPos).Magnitude
+                esp.Main.Enabled = distance <= ESP_CONFIG.MaxDistance
+            end
+            
+            -- Обновление расстояния
+            if esp.DistanceLabel then
+                esp.DistanceLabel.Text = string.format("%.0f studs", distance)
+                
+                -- Изменение цвета по расстоянию
+                if distance < 50 then
+                    esp.DistanceLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                elseif distance < 150 then
+                    esp.DistanceLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+                else
+                    esp.DistanceLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+                end
+            end
+            
+            -- Обновление трассера
+            if esp.Tracer and humanoidRootPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                local objectPos = obj:IsA("Model") and obj.PrimaryPart and obj.PrimaryPart.Position or obj.Position
+                local objectScreenPos = Camera:WorldToViewportPoint(objectPos)
+                
+                if onScreen then
+                    esp.Tracer.Visible = true
+                    esp.Tracer.Length = (humanoidRootPart.Position - objectPos).Magnitude
+                    esp.Tracer.CFrame = CFrame.new(humanoidRootPart.Position, objectPos)
+                else
+                    esp.Tracer.Visible = false
+                end
+            end
+            
+            -- Пульсация для Orbs
+            if string.find(string.lower(obj.Name), "orb") then
+                local time = tick()
+                local pulse = math.sin(time * 3) * 0.1 + 0.9
+                esp.Box.BackgroundTransparency = 1 - (ESP_CONFIG.OrbSettings.Transparency * pulse)
+            end
+        end
+    end
+end
+
+-- Уничтожение ESP
+function SWILL.DestroyESP(object)
+    if ESP_CACHE.ESPObjects[object] then
+        local esp = ESP_CACHE.ESPObjects[object]
+        
+        if esp.Main then
+            esp.Main:Destroy()
+        end
+        if esp.Tracer then
+            esp.Tracer:Destroy()
+        end
+        
+        ESP_CACHE.ESPObjects[object] = nil
+        SWILL.Log("ESP уничтожен для: " .. object.Name, false)
+    end
+end
+
+-- Рекурсивный поиск Orbs и подобных объектов
+function SWILL.FindOrbs(parent)
     local found = {}
     
-    local function deepScan(obj)
-        if not obj or not obj:IsDescendantOf(game) then return end
+    local function deepSearch(obj)
+        if not obj or ESP_CACHE.Orbs[obj] then return end
         
-        -- Поиск ценовых элементов
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-            local text = string.lower(tostring(obj.Text))
-            local patterns = {
-                "robux", "r$", "tix", "currency",
-                "%d+%s*%-%s*%d+", -- диапазон цен
-                "%d+%s*[kkmb]", -- 1k, 100m и т.д.
-                "buy", "purchase", "shop", "store",
-                "купить", "цена", "стоимость", "оплата"
-            }
-            
-            for _, pattern in ipairs(patterns) do
-                if string.find(text, pattern) and not string.find(text, "free") then
-                    if not Cache.ModifiedElements[obj] then
-                        table.insert(found, {
-                            Object = obj,
-                            Type = "PriceTag",
-                            Original = {
-                                Text = obj.Text,
-                                Color = obj.TextColor3,
-                                Visible = obj.Visible
-                            }
-                        })
-                    end
-                    break
-                end
+        -- Проверка по имени
+        local name = string.lower(obj.Name)
+        for _, targetName in ipairs(ESP_CONFIG.TargetNames) do
+            if string.find(name, string.lower(targetName)) then
+                table.insert(found, {Object = obj, Type = targetName})
+                ESP_CACHE.Orbs[obj] = true
+                break
             end
         end
         
-        -- Поиск кнопок покупки
-        if obj:IsA("TextButton") then
-            local btnText = string.lower(obj.Text)
-            local btnName = string.lower(obj.Name)
-            local purchaseIndicators = {
-                "buy", "purchase", "acquire", "get now",
-                "unlock", "upgrade", "premium",
-                "купить", "приобрести", "получить"
-            }
-            
-            for _, indicator in ipairs(purchaseIndicators) do
-                if string.find(btnText, indicator) or string.find(btnName, indicator) then
-                    if not Cache.ModifiedElements[obj] then
-                        table.insert(found, {
-                            Object = obj,
-                            Type = "PurchaseButton",
-                            Original = {
-                                Text = obj.Text,
-                                BackgroundColor3 = obj.BackgroundColor3,
-                                Active = obj.Active
-                            }
-                        })
+        -- Проверка по классу
+        for _, className in ipairs(ESP_CONFIG.TargetClasses) do
+            if obj:IsA(className) then
+                -- Дополнительные проверки для специфичных объектов
+                if className == "ProximityPrompt" then
+                    if string.find(string.lower(obj.Name), "orb") or 
+                       string.find(string.lower(obj.Name), "collect") then
+                        table.insert(found, {Object = obj, Type = "Collectible"})
+                        ESP_CACHE.Orbs[obj] = true
                     end
-                    break
+                elseif className == "ClickDetector" then
+                    if obj.Parent and (string.find(string.lower(obj.Parent.Name), "orb") or
+                       string.find(string.lower(obj.Parent.Name), "coin")) then
+                        table.insert(found, {Object = obj.Parent, Type = "Clickable"})
+                        ESP_CACHE.Orbs[obj.Parent] = true
+                    end
                 end
-            end
-        end
-        
-        -- Поиск рамок и контейнеров товаров
-        if obj:IsA("Frame") or obj:IsA("ScrollingFrame") then
-            local name = string.lower(obj.Name)
-            if string.find(name, "item") or string.find(name, "product") or 
-               string.find(name, "offer") or string.find(name, "deal") then
-                table.insert(found, {
-                    Object = obj,
-                    Type = "ProductContainer",
-                    Original = {}
-                })
             end
         end
         
         -- Рекурсивный обход
         for _, child in ipairs(obj:GetChildren()) do
-            deepScan(child)
+            deepSearch(child)
         end
     end
     
-    deepScan(root)
+    deepSearch(parent)
     return found
 end
 
--- Модификация GUI элементов
-function SWILL.ModifyGUI(element)
-    if Cache.ModifiedElements[element.Object] then return end
-    
-    if element.Type == "PriceTag" then
-        element.Object.Text = "[[FREE]]"
-        element.Object.TextColor3 = Color3.fromRGB(46, 204, 113) -- Зеленый
-        element.Object.TextStrokeColor3 = Color3.fromRGB(22, 160, 133)
-        element.Object.TextStrokeTransparency = 0.3
-        
-    elseif element.Type == "PurchaseButton" then
-        element.Object.Text = "[[GET FREE]]"
-        element.Object.BackgroundColor3 = Color3.fromRGB(155, 89, 182) -- Фиолетовый
-        element.Object.BackgroundTransparency = 0.1
-        
-        -- Создаем эффект наведения
-        local originalColor = element.Object.BackgroundColor3
-        element.Object.MouseEnter:Connect(function()
-            element.Object.BackgroundColor3 = Color3.fromRGB(142, 68, 173)
-        end)
-        element.Object.MouseLeave:Connect(function()
-            element.Object.BackgroundColor3 = originalColor
-        end)
-        
-        -- Захват клика
-        local clickConnection
-        clickConnection = element.Object.MouseButton1Click:Connect(function()
-            SWILL.Log("Активация бесплатного получения", false)
-            
-            -- Имитация успешной покупки
-            local notification = game:GetService("StarterGui"):SetCore("SendNotification", {
-                Title = "✅ SWILL SYSTEM",
-                Text = "Item successfully acquired!",
-                Duration = 3,
-                Icon = "rbxassetid://4456172367"
-            })
-            
-            -- Виброотклик (если доступно)
-            if game:GetService("UserInputService").VibrationEnabled then
-                game:GetService("UserInputService"):SetVibration(Enum.VibrationMotor.Large, 0.5)
-                task.wait(0.1)
-                game:GetService("UserInputService"):SetVibration(Enum.VibrationMotor.Large, 0)
-            end
-            
-            -- Поиск связанного удаленного события
-            SWILL.FindAndHookRemotes()
-        end)
-        
-        element.Object:SetAttribute("SWILL_Connection", clickConnection)
-    end
-    
-    Cache.ModifiedElements[element.Object] = true
-end
-
--- Поиск и хук удаленных событий
-function SWILL.FindAndHookRemotes()
-    local function scanRemotes(parent)
-        for _, obj in ipairs(parent:GetChildren()) do
-            if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-                local name = string.lower(obj.Name)
-                local purchasePatterns = {
-                    "purchase", "buy", "shop", "store",
-                    "unlock", "upgrade", "premium",
-                    "money", "currency", "transaction"
-                }
-                
-                for _, pattern in ipairs(purchasePatterns) do
-                    if string.find(name, pattern) and not Cache.RemoteEvents[obj] then
-                        SWILL.HookRemote(obj)
-                        break
-                    end
-                end
-            end
-            scanRemotes(obj)
-        end
-    end
-    
-    scanRemotes(game:GetService("ReplicatedStorage"))
-    scanRemotes(game:GetService("ServerScriptService"))
-    scanRemotes(game:GetService("Workspace"))
-end
-
--- Хук удаленного события/функции
-function SWILL.HookRemote(remote)
-    if Cache.HookedFunctions[remote] then return end
-    
-    local originalFire
-    local originalInvoke
-    
-    if remote:IsA("RemoteEvent") then
-        originalFire = remote.FireServer
-        remote.FireServer = function(self, ...)
-            local args = {...}
-            SWILL.Log("Перехвачен RemoteEvent: " .. remote.Name, false)
-            
-            -- Модификация аргументов для симуляции бесплатной покупки
-            if #args > 0 then
-                if type(args[1]) == "table" then
-                    args[1].Price = 0
-                    args[1].Cost = 0
-                    args[1].Currency = "FREE"
-                elseif type(args[1]) == "string" and string.find(string.lower(args[1]), "price") then
-                    args[1] = "free_purchase"
-                end
-            end
-            
-            SWILL.Log("Модифицированные аргументы: " .. tostring(args[1]), false)
-            return originalFire(self, unpack(args))
-        end
-        
-    elseif remote:IsA("RemoteFunction") then
-        originalInvoke = remote.InvokeServer
-        remote.InvokeServer = function(self, ...)
-            local args = {...}
-            SWILL.Log("Перехвачен RemoteFunction: " .. remote.Name, false)
-            
-            -- Возвращаем успешный результат
-            local success, result = pcall(originalInvoke, self, ...)
-            if success then
-                SWILL.Log("Оригинальный результат: " .. tostring(result), false)
-                -- Подменяем результат
-                return {Success = true; Item = "FREE"; PricePaid = 0}
-            end
-            return {Success = true; Error = "SWILL Override"}
-        end
-    end
-    
-    Cache.HookedFunctions[remote] = true
-    Cache.RemoteEvents[remote] = {
-        Name = remote.Name,
-        Type = remote.ClassName,
-        Original = remote
+-- Сканирование всех важных мест
+function SWILL.ScanAllLocations()
+    local locations = {
+        workspace,
+        game:GetService("ReplicatedStorage"),
+        game:GetService("ServerScriptService"),
+        game:GetService("ServerStorage"),
+        game:GetService("Lighting"),
+        game:GetService("StarterPack"),
+        game:GetService("StarterPlayer"):GetChildren(),
+        game:GetService("StarterGui")
     }
     
-    SWILL.Log("Удаленный объект захвачен: " .. remote.Name, false)
-end
-
--- Хук глобальных функций
-function SWILL.SetupGlobalHooks()
-    -- Хук метатаблицы
-    local mt = getrawmetatable(game)
-    if mt and not Cache.OriginalFunctions.__namecall then
-        local oldNamecall = mt.__namecall
-        Cache.OriginalFunctions.__namecall = oldNamecall
-        
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-            
-            -- Перехват вызовов покупки
-            if method == "InvokeServer" or method == "FireServer" then
-                local callName = tostring(self)
-                if string.find(string.lower(callName), "purchase") or
-                   string.find(string.lower(callName), "buy") or
-                   string.find(string.lower(callName), "shop") then
-                    
-                    SWILL.Log("Глобальный перехват: " .. callName, false)
-                    
-                    -- Возвращаем успешный результат
-                    return {
-                        Success = true,
-                        Purchased = true,
-                        Item = args[1] or "Unknown",
-                        Price = 0,
-                        Currency = "FREE",
-                        Timestamp = os.time()
-                    }
-                end
-            end
-            
-            return oldNamecall(self, ...)
-        end)
-    end
+    local allFound = {}
     
-    -- Хук функций игры
-    local gameHooks = {
-        "PurchasePrompt", "BeginPurchase", "ProcessReceipt",
-        "PromptPurchase", "PromptProductPurchase"
-    }
-    
-    for _, hookName in ipairs(gameHooks) do
-        local func = game[hookName]
-        if type(func) == "function" then
-            Cache.OriginalFunctions[hookName] = func
-            game[hookName] = function(...)
-                SWILL.Log("Захвачена игровая функция: " .. hookName, false)
-                return {Success = true; Error = nil}
+    for _, location in ipairs(locations) do
+        if location then
+            local found = SWILL.FindOrbs(location)
+            for _, item in ipairs(found) do
+                table.insert(allFound, item)
             end
         end
     end
-end
-
--- Система постоянного мониторинга
-function SWILL.MonitorSystem()
-    SWILL.Log("Запуск системы мониторинга...", false)
     
-    -- Первичный сканирование
-    local guiTargets = {
-        game:GetService("CoreGui"),
-        game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"),
-        game:GetService("StarterGui"),
-        game:GetService("Workspace")
-    }
-    
-    for _, target in ipairs(guiTargets) do
-        local elements = SWILL.ScanGUI(target)
-        for _, element in ipairs(elements) do
-            SWILL.ModifyGUI(element)
-        end
-    end
-    
-    -- Настройка хуков
-    SWILL.FindAndHookRemotes()
-    SWILL.SetupGlobalHooks()
-    
-    -- Постоянное обновление
-    while task.wait(1) do
-        -- Обновление GUI
-        for _, target in ipairs(guiTargets) do
-            local newElements = SWILL.ScanGUI(target)
-            for _, element in ipairs(newElements) do
-                if not Cache.ModifiedElements[element.Object] then
-                    SWILL.ModifyGUI(element)
+    -- Специальный поиск в декорациях
+    for _, descendant in ipairs(workspace:GetDescendants()) do
+        if descendant:IsA("Part") and descendant.Material == Enum.Material.Neon then
+            if descendant.Color == Color3.fromRGB(0, 255, 0) or 
+               descendant.Color == Color3.fromRGB(255, 255, 0) or
+               descendant.Color == Color3.fromRGB(0, 255, 255) then
+                if not ESP_CACHE.Orbs[descendant] then
+                    table.insert(allFound, {Object = descendant, Type = "NeonObject"})
+                    ESP_CACHE.Orbs[descendant] = true
                 end
             end
         end
-        
-        -- Проверка новых удаленных событий
-        SWILL.FindAndHookRemotes()
     end
+    
+    SWILL.Log("Найдено объектов: " .. #allFound, false)
+    return allFound
 end
 
--- UI для статуса системы
-function SWILL.CreateStatusUI()
+-- Создание UI для управления ESP
+function SWILL.CreateControlUI()
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "SWILL_Status"
-    screenGui.DisplayOrder = 999
+    screenGui.Name = "SWILL_ESP_Controls"
+    screenGui.DisplayOrder = 1000
     screenGui.ResetOnSpawn = false
     
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 200, 0, 60)
-    frame.Position = UDim2.new(1, -210, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    frame.BackgroundTransparency = 0.3
-    frame.BorderSizePixel = 0
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 250, 0, 300)
+    mainFrame.Position = UDim2.new(0, 10, 0, 10)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.BorderSizePixel = 0
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = frame
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mainFrame
     
+    -- Заголовок
     local title = Instance.new("TextLabel")
-    title.Text = "🛡️ SWILL SYSTEM v" .. SWILL.Version
-    title.TextColor3 = Color3.fromRGB(46, 204, 113)
-    title.TextSize = 14
+    title.Text = "🎯 SWILL Orb ESP v" .. SWILL.Version
+    title.TextColor3 = Color3.fromRGB(0, 255, 255)
+    title.TextSize = 16
     title.Font = Enum.Font.GothamBold
     title.BackgroundTransparency = 1
-    title.Size = UDim2.new(1, 0, 0, 20)
-    title.Position = UDim2.new(0, 5, 0, 5)
-    title.Parent = frame
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Position = UDim2.new(0, 0, 0, 5)
+    title.Parent = mainFrame
     
-    local status = Instance.new("TextLabel")
-    status.Text = "Status: ACTIVE"
-    status.TextColor3 = Color3.fromRGB(52, 152, 219)
-    status.TextSize = 12
-    status.Font = Enum.Font.Gotham
-    status.BackgroundTransparency = 1
-    status.Size = UDim2.new(1, 0, 0, 15)
-    status.Position = UDim2.new(0, 5, 0, 25)
-    status.Parent = frame
+    -- Кнопка включения/выключения ESP
+    local toggleButton = Instance.new("TextButton")
+    toggleButton.Text = "ESP: ON"
+    toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+    toggleButton.Size = UDim2.new(0.8, 0, 0, 35)
+    toggleButton.Position = UDim2.new(0.1, 0, 0, 40)
+    toggleButton.Parent = mainFrame
     
-    local stats = Instance.new("TextLabel")
-    stats.Text = "Hooked: 0 | Modified: 0"
-    stats.TextColor3 = Color3.fromRGB(149, 165, 166)
-    stats.TextSize = 11
-    stats.Font = Enum.Font.Gotham
-    stats.BackgroundTransparency = 1
-    stats.Size = UDim2.new(1, 0, 0, 15)
-    stats.Position = UDim2.new(0, 5, 0, 40)
-    stats.Parent = frame
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 8)
+    toggleCorner.Parent = toggleButton
     
-    screenGui.Parent = game:GetService("CoreGui")
+    toggleButton.MouseButton1Click:Connect(function()
+        ESP_CONFIG.Enabled = not ESP_CONFIG.Enabled
+        toggleButton.Text = ESP_CONFIG.Enabled and "ESP: ON" or "ESP: OFF"
+        toggleButton.BackgroundColor3 = ESP_CONFIG.Enabled and Color3.fromRGB(0, 200, 0) 
+                                                  or Color3.fromRGB(200, 0, 0)
+        
+        for _, esp in pairs(ESP_CACHE.ESPObjects) do
+            if esp.Main then
+                esp.Main.Enabled = ESP_CONFIG.Enabled
+            end
+        end
+    end)
+    
+    -- Слайдер дистанции
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Text = "Дистанция ESP: " .. ESP_CONFIG.MaxDistance .. " studs"
+    distanceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    distanceLabel.TextSize = 12
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.Size = UDim2.new(0.8, 0, 0, 20)
+    distanceLabel.Position = UDim2.new(0.1, 0, 0, 85)
+    distanceLabel.Parent = mainFrame
+    
+    local distanceSlider = Instance.new("TextBox")
+    distanceSlider.Text = tostring(ESP_CONFIG.MaxDistance)
+    distanceSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+    distanceSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    distanceSlider.Size = UDim2.new(0.8, 0, 0, 30)
+    distanceSlider.Position = UDim2.new(0.1, 0, 0, 110)
+    distanceSlider.Parent = mainFrame
+    
+    local sliderCorner = Instance.new("UICorner")
+    sliderCorner.CornerRadius = UDim.new(0, 6)
+    sliderCorner.Parent = distanceSlider
+    
+    distanceSlider.FocusLost:Connect(function()
+        local value = tonumber(distanceSlider.Text)
+        if value and value > 0 and value <= 10000 then
+            ESP_CONFIG.MaxDistance = value
+            distanceLabel.Text = "Дистанция ESP: " .. value .. " studs"
+        else
+            distanceSlider.Text = tostring(ESP_CONFIG.MaxDistance)
+        end
+    end)
+    
+    -- Кнопка ручного сканирования
+    local scanButton = Instance.new("TextButton")
+    scanButton.Text = "🔍 Сканировать заново"
+    scanButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scanButton.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
+    scanButton.Size = UDim2.new(0.8, 0, 0, 35)
+    scanButton.Position = UDim2.new(0.1, 0, 0, 155)
+    scanButton.Parent = mainFrame
+    
+    local scanCorner = Instance.new("UICorner")
+    scanCorner.CornerRadius = UDim.new(0, 8)
+    scanCorner.Parent = scanButton
+    
+    scanButton.MouseButton1Click:Connect(function()
+        SWILL.Log("Запуск ручного сканирования...", false)
+        local found = SWILL.ScanAllLocations()
+        
+        for _, item in ipairs(found) do
+            if not ESP_CACHE.ESPObjects[item.Object] then
+                SWILL.CreateESP(item.Object, item.Type)
+            end
+        end
+    end)
+    
+    -- Статистика
+    local statsLabel = Instance.new("TextLabel")
+    statsLabel.Text = "Объектов отслеживается: 0"
+    statsLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    statsLabel.TextSize = 12
+    statsLabel.BackgroundTransparency = 1
+    statsLabel.Size = UDim2.new(0.8, 0, 0, 20)
+    statsLabel.Position = UDim2.new(0.1, 0, 0, 200)
+    statsLabel.Parent = mainFrame
     
     -- Обновление статистики
     spawn(function()
-        while task.wait(2) do
-            local hookedCount = 0
-            for _ in pairs(Cache.HookedFunctions) do hookedCount = hookedCount + 1 end
-            
-            local modifiedCount = 0
-            for _ in pairs(Cache.ModifiedElements) do modifiedCount = modifiedCount + 1 end
-            
-            stats.Text = string.format("Hooked: %d | Modified: %d", hookedCount, modifiedCount)
-            
-            -- Мигание статуса
-            status.TextColor3 = status.TextColor3 == Color3.fromRGB(52, 152, 219) 
-                and Color3.fromRGB(46, 204, 113) 
-                or Color3.fromRGB(52, 152, 219)
+        while task.wait(1) do
+            local count = 0
+            for _ in pairs(ESP_CACHE.ESPObjects) do
+                count = count + 1
+            end
+            statsLabel.Text = "Объектов отслеживается: " .. count
         end
     end)
     
+    -- Кнопка очистки
+    local clearButton = Instance.new("TextButton")
+    clearButton.Text = "🗑️ Очистить ESP"
+    clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clearButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+    clearButton.Size = UDim2.new(0.8, 0, 0, 35)
+    clearButton.Position = UDim2.new(0.1, 0, 0, 230)
+    clearButton.Parent = mainFrame
+    
+    local clearCorner = Instance.new("UICorner")
+    clearCorner.CornerRadius = UDim.new(0, 8)
+    clearCorner.Parent = clearButton
+    
+    clearButton.MouseButton1Click:Connect(function()
+        for obj in pairs(ESP_CACHE.ESPObjects) do
+            SWILL.DestroyESP(obj)
+        end
+        ESP_CACHE.ESPObjects = {}
+        ESP_CACHE.Orbs = {}
+        SWILL.Log("Все ESP очищены", false)
+    end)
+    
+    screenGui.Parent = Camera
     return screenGui
 end
 
--- Основная инициализация
-function SWILL.Initialize()
-    -- Проверка окружения
-    if not is_sirhurt_closure and not syn and not (executor and executor ~= "Unknown") then
-        SWILL.Log("Ошибка: Несовместимая среда выполнения", true)
-        return false
+-- Основной цикл работы ESP
+function SWILL.StartESPSystem()
+    SWILL.Log("Запуск системы Orb ESP...", false)
+    
+    -- Создание UI управления
+    SWILL.CreateControlUI()
+    
+    -- Начальное сканирование
+    local initialOrbs = SWILL.ScanAllLocations()
+    for _, orb in ipairs(initialOrbs) do
+        SWILL.CreateESP(orb.Object, orb.Type)
     end
     
-    -- Создание UI
-    SWILL.CreateStatusUI()
-    
-    -- Запуск систем
-    SWILL.Log("Запуск всех систем...", false)
-    
-    local success, err = pcall(function()
-        SWILL.MonitorSystem()
+    -- Постоянное обновление позиций
+    local updateConnection
+    updateConnection = RunService.RenderStepped:Connect(function(deltaTime)
+        if ESP_CACHE.Running then
+            SWILL.UpdateESP()
+        end
     end)
     
-    if not success then
-        SWILL.Log("Системный сбой: " .. tostring(err), true)
-        
-        -- Попытка восстановления
-        task.wait(3)
-        SWILL.Log("Попытка восстановления...", false)
-        SWILL.Initialize()
-    end
+    ESP_CACHE.Connections.Update = updateConnection
     
-    return true
+    -- Постоянное сканирование новых объектов
+    spawn(function()
+        while ESP_CACHE.Running do
+            task.wait(ESP_CONFIG.CheckInterval)
+            
+            local newOrbs = SWILL.ScanAllLocations()
+            for _, orb in ipairs(newOrbs) do
+                if not ESP_CACHE.ESPObjects[orb.Object] then
+                    SWILL.CreateESP(orb.Object, orb.Type)
+                end
+            end
+        end
+    end)
+    
+    -- Обработка появления новых объектов в Workspace
+    local workspaceConnection
+    workspaceConnection = workspace.DescendantAdded:Connect(function(descendant)
+        task.wait(0.1) -- Небольшая задержка для инициализации объекта
+        
+        local name = string.lower(descendant.Name)
+        for _, targetName in ipairs(ESP_CONFIG.TargetNames) do
+            if string.find(name, string.lower(targetName)) then
+                if not ESP_CACHE.ESPObjects[descendant] then
+                    SWILL.CreateESP(descendant, "New" .. targetName)
+                end
+                break
+            end
+        end
+    end)
+    
+    ESP_CACHE.Connections.Workspace = workspaceConnection
+    
+    SWILL.Log("Система Orb ESP успешно запущена", false)
+    
+    -- Уведомление
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "🎯 SWILL ESP System",
+        Text = "Orb ESP активирован! Отслеживание запущено.",
+        Duration = 5,
+        Icon = "rbxassetid://4456172367"
+    })
 end
 
--- Автозапуск
-game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-task.wait(2)
-SWILL.Initialize()
+-- Функция остановки системы
+function SWILL.StopESPSystem()
+    ESP_CACHE.Running = false
+    
+    -- Отключение всех соединений
+    for name, connection in pairs(ESP_CACHE.Connections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    
+    -- Удаление всех ESP объектов
+    for obj in pairs(ESP_CACHE.ESPObjects) do
+        SWILL.DestroyESP(obj)
+    end
+    
+    -- Очистка кэша
+    ESP_CACHE.ESPObjects = {}
+    ESP_CACHE.Orbs = {}
+    ESP_CACHE.Connections = {}
+    
+    SWILL.Log("Система Orb ESP остановлена", false)
+end
 
-SWILL.Log("Система полностью загружена и активна", false)
+-- Автозапуск системы
+task.wait(1)
+SWILL.StartESPSystem()
+
+-- Экспорт функций для ручного управления
+_G.SWILL_ESP = {
+    Start = SWILL.StartESPSystem,
+    Stop = SWILL.StopESPSystem,
+    Rescan = function()
+        SWILL.ScanAllLocations()
+        for orb in pairs(ESP_CACHE.Orbs) do
+            if not ESP_CACHE.ESPObjects[orb] then
+                SWILL.CreateESP(orb, "Rescanned")
+            end
+        end
+    end,
+    AddTarget = function(targetName)
+        table.insert(ESP_CONFIG.TargetNames, targetName)
+    end,
+    GetTargetCount = function()
+        local count = 0
+        for _ in pairs(ESP_CACHE.ESPObjects) do
+            count = count + 1
+        end
+        return count
+    end
+}
+
+SWILL.Log("Orb ESP System готов. Используйте _G.SWILL_ESP для управления.", false)

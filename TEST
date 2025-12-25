@@ -1,413 +1,288 @@
--- STIDEV Enhanced Settings Menu v2.0
--- Анимированное переработанное меню
--- Исправленная и рабочая версия
+-- No Limit Orb Farm | STIDEV - Enhanced Beautiful UI v2.0 (2025)
 
-local STIDEV = {
-    Version = "2.0",
-    Author = "STIDEV",
-    Theme = "Midnight"
-}
-
--- Проверка исполнителя (опционально)
-if not (executor and executor ~= "Unknown") then
-    warn("[STIDEV] Executor не обнаружен")
-end
-
--- Сервисы
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
-local CoreGui = game:GetService("CoreGui")
+local StarterGui = game:GetService("StarterGui")
 
--- Конфигурация дизайна
+local LocalPlayer = Players.LocalPlayer
+
+local Stage = 1
+local MaxStage = 30
+local Running = false
+
+-- Дизайн
 local DESIGN = {
-    Primary = Color3.fromRGB(25, 25, 35),
-    Secondary = Color3.fromRGB(40, 40, 55),
-    Accent = Color3.fromRGB(0, 150, 255),
+    Primary = Color3.fromRGB(20, 20, 30),
+    Secondary = Color3.fromRGB(30, 30, 45),
+    Accent = Color3.fromRGB(0, 170, 255),
     Success = Color3.fromRGB(0, 200, 100),
-    Warning = Color3.fromRGB(255, 180, 0),
     Danger = Color3.fromRGB(255, 60, 60),
     Text = Color3.fromRGB(240, 240, 240),
-
-    GlowIntensity = 0.3,
-    ShadowTransparency = 0.8,
-
-    TweenSpeed = 0.25,
-    HoverEffect = 0.15,
-    ClickEffect = 0.1,
-
-    WindowWidth = 320,
-    SectionHeight = 40,
-    ButtonHeight = 36,
-    ToggleSize = 24
+    HoverLighten = 0.15
 }
 
--- Анимационные утилиты
-local Animation = {
-    Tweens = {},
-    HoverStates = {}
-}
-
-function Animation:Tween(object, properties, duration, easing)
-    local tweenInfo = TweenInfo.new(
-        duration or DESIGN.TweenSpeed,
-        easing or Enum.EasingStyle.Quint,
-        Enum.EasingDirection.Out
-    )
-    local tween = TweenService:Create(object, tweenInfo, properties)
-    tween:Play()
-    table.insert(self.Tweens, tween)
-    return tween
+-- Анимации
+local function Tween(obj, props, duration = 0.3)
+    TweenService:Create(obj, TweenInfo.new(duration, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), props):Play()
 end
 
-function Animation:ButtonHoverEffect(button)
-    local originalColor = button.BackgroundColor3
-    local originalSize = button.Size
-
+local function AddHoverEffect(button, baseColor)
     button.MouseEnter:Connect(function()
-        self:Tween(button, {
-            BackgroundColor3 = originalColor:Lerp(Color3.fromRGB(255, 255, 255), DESIGN.HoverEffect),
-            Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset + 4, originalSize.Y.Scale, originalSize.Y.Offset + 4)
-        })
+        Tween(button, {BackgroundColor3 = baseColor:Lerp(Color3.new(1,1,1), DESIGN.HoverLighten)})
     end)
-
     button.MouseLeave:Connect(function()
-        self:Tween(button, {
-            BackgroundColor3 = originalColor,
-            Size = originalSize
-        })
-    end)
-
-    button.MouseButton1Down:Connect(function()
-        self:Tween(button, {
-            BackgroundColor3 = originalColor:Lerp(Color3.fromRGB(150, 150, 150), DESIGN.ClickEffect),
-            Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset - 2, originalSize.Y.Scale, originalSize.Y.Offset - 2)
-        }, 0.1)
-    end)
-
-    button.MouseButton1Up:Connect(function()
-        self:Tween(button, {
-            BackgroundColor3 = originalColor,
-            Size = originalSize
-        }, 0.15)
+        Tween(button, {BackgroundColor3 = baseColor})
     end)
 end
 
--- Основная функция создания интерфейса
-local function createEnhancedInterface()
-    local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "STIDEV_Settings"
-    ScreenGui.ResetOnSpawn = false
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+-- Создание GUI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "STIDEV_OrbFarm"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
 
-    local BackgroundOverlay = Instance.new("Frame")
-    BackgroundOverlay.Name = "BackgroundOverlay"
-    BackgroundOverlay.Size = UDim2.new(1, 0, 1, 0)
-    BackgroundOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    BackgroundOverlay.BackgroundTransparency = 0.7
-    BackgroundOverlay.BorderSizePixel = 0
-    BackgroundOverlay.ZIndex = 0
-    BackgroundOverlay.Parent = ScreenGui
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 260, 0, 180)
+MainFrame.Position = UDim2.new(0.5, -130, 0.5, -90)
+MainFrame.BackgroundColor3 = DESIGN.Primary
+MainFrame.Parent = ScreenGui
 
-    local MainWindow = Instance.new("Frame")
-    MainWindow.Name = "MainWindow"
-    MainWindow.Size = UDim2.new(0, DESIGN.WindowWidth, 0, 480)
-    MainWindow.Position = UDim2.new(0.5, -DESIGN.WindowWidth/2, 0.5, -240)
-    MainWindow.BackgroundColor3 = DESIGN.Primary
-    MainWindow.BorderSizePixel = 0
-    MainWindow.ZIndex = 1
-    MainWindow.Parent = ScreenGui
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 16)
+MainCorner.Parent = MainFrame
 
-    local windowCorner = Instance.new("UICorner")
-    windowCorner.CornerRadius = UDim.new(0, 16)
-    windowCorner.Parent = MainWindow
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = DESIGN.Accent
+MainStroke.Thickness = 2
+MainStroke.Transparency = 0.4
+MainStroke.Parent = MainFrame
 
-    local windowGlow = Instance.new("UIStroke")
-    windowGlow.Color = DESIGN.Accent
-    windowGlow.Thickness = 2
-    windowGlow.Transparency = DESIGN.GlowIntensity
-    windowGlow.Parent = MainWindow
+local MainGradient = Instance.new("UIGradient")
+MainGradient.Color = ColorSequence.new{DESIGN.Primary, Color3.fromRGB(35, 35, 50)}
+MainGradient.Rotation = 90
+MainGradient.Parent = MainFrame
 
-    local windowGradient = Instance.new("UIGradient")
-    windowGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 45)),
-        ColorSequenceKeypoint.new(1, DESIGN.Primary)
-    }
-    windowGradient.Rotation = 120
-    windowGradient.Parent = MainWindow
+-- Заголовок
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 50)
+TitleBar.BackgroundColor3 = DESIGN.Secondary
+TitleBar.Parent = MainFrame
 
-    -- Заголовок
-    local TitleBar = Instance.new("Frame")
-    TitleBar.Name = "TitleBar"
-    TitleBar.Size = UDim2.new(1, -24, 0, 60)
-    TitleBar.Position = UDim2.new(0, 12, 0, 12)
-    TitleBar.BackgroundTransparency = 1
-    TitleBar.Parent = MainWindow
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 16)
+TitleCorner.Parent = TitleBar
 
-    local Logo = Instance.new("TextLabel")
-    Logo.Size = UDim2.new(0, 40, 0, 40)
-    Logo.BackgroundTransparency = 1
-    Logo.Text = "⚙️"
-    Logo.TextSize = 28
-    Logo.TextColor3 = DESIGN.Accent
-    Logo.Parent = TitleBar
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -60, 1, 0)
+TitleLabel.Position = UDim2.new(0, 15, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "⚡ No Limit Orb Farm"
+TitleLabel.TextColor3 = DESIGN.Accent
+TitleLabel.TextSize = 18
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TitleBar
 
-    local TitleContainer = Instance.new("Frame")
-    TitleContainer.Size = UDim2.new(1, -50, 1, 0)
-    TitleContainer.Position = UDim2.new(0, 45, 0, 0)
-    TitleContainer.BackgroundTransparency = 1
-    TitleContainer.Parent = TitleBar
+local Subtitle = Instance.new("TextLabel")
+Subtitle.Size = UDim2.new(1, -60, 0.5, 0)
+Subtitle.Position = UDim2.new(0, 18, 0.5, 0)
+Subtitle.BackgroundTransparency = 1
+Subtitle.Text = "by STIDEV"
+Subtitle.TextColor3 = Color3.fromRGB(180, 180, 180)
+Subtitle.TextSize = 12
+Subtitle.Font = Enum.Font.Gotham
+Subtitle.TextXAlignment = Enum.TextXAlignment.Left
+Subtitle.Parent = TitleBar
 
-    local TitleText = Instance.new("TextLabel")
-    TitleText.Size = UDim2.new(1, 0, 0.6, 0)
-    TitleText.BackgroundTransparency = 1
-    TitleText.Text = "STIDEV SETTINGS"
-    TitleText.TextColor3 = DESIGN.Text
-    TitleText.TextSize = 20
-    TitleText.Font = Enum.Font.GothamBlack
-    TitleText.TextXAlignment = Enum.TextXAlignment.Left
-    TitleText.Parent = TitleContainer
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 36, 0, 36)
+CloseButton.Position = UDim2.new(1, -44, 0, 7)
+CloseButton.BackgroundColor3 = DESIGN.Danger
+CloseButton.Text = "×"
+CloseButton.TextColor3 = Color3.new(1,1,1)
+CloseButton.TextSize = 24
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = TitleBar
 
-    local SubtitleText = Instance.new("TextLabel")
-    SubtitleText.Size = UDim2.new(1, 0, 0.4, 0)
-    SubtitleText.Position = UDim2.new(0, 0, 0.6, 0)
-    SubtitleText.BackgroundTransparency = 1
-    SubtitleText.Text = "Enhanced Control Panel"
-    SubtitleText.TextColor3 = DESIGN.Text:Lerp(Color3.fromRGB(150, 150, 150), 0.5)
-    SubtitleText.TextSize = 12
-    SubtitleText.Font = Enum.Font.Gotham
-    SubtitleText.TextXAlignment = Enum.TextXAlignment.Left
-    SubtitleText.Parent = TitleContainer
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(1, 0)
+CloseCorner.Parent = CloseButton
+AddHoverEffect(CloseButton, DESIGN.Danger)
 
-    -- Кнопка закрытия
-    local CloseButton = Instance.new("TextButton")
-    CloseButton.Size = UDim2.new(0, 32, 0, 32)
-    CloseButton.Position = UDim2.new(1, -32, 0, 0)
-    CloseButton.BackgroundColor3 = DESIGN.Danger
-    CloseButton.Text = "×"
-    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    CloseButton.TextSize = 20
-    CloseButton.Font = Enum.Font.GothamBlack
-    CloseButton.AutoButtonColor = false
-    CloseButton.Parent = TitleBar
+-- Контент
+local StageLabel = Instance.new("TextLabel")
+StageLabel.Size = UDim2.new(0.4, 0, 0, 30)
+StageLabel.Position = UDim2.new(0, 20, 0, 60)
+StageLabel.BackgroundTransparency = 1
+StageLabel.Text = "Stage:"
+StageLabel.TextColor3 = DESIGN.Text
+StageLabel.TextSize = 16
+StageLabel.Font = Enum.Font.GothamBold
+StageLabel.TextXAlignment = Enum.TextXAlignment.Left
+StageLabel.Parent = MainFrame
 
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(1, 0)
-    closeCorner.Parent = CloseButton
+local StageBox = Instance.new("TextBox")
+StageBox.Size = UDim2.new(0, 80, 0, 34)
+StageBox.Position = UDim2.new(0.5, -40, 0, 58)
+StageBox.BackgroundColor3 = DESIGN.Secondary
+StageBox.TextColor3 = DESIGN.Text
+StageBox.PlaceholderText = "1"
+StageBox.Text = "1"
+StageBox.TextSize = 16
+StageBox.Font = Enum.Font.Gotham
+StageBox.Parent = MainFrame
 
-    Animation:ButtonHoverEffect(CloseButton)
+local BoxCorner = Instance.new("UICorner")
+BoxCorner.CornerRadius = UDim.new(0, 8)
+BoxCorner.Parent = StageBox
 
-    -- Контейнер настроек
-    local SettingsContainer = Instance.new("ScrollingFrame")
-    SettingsContainer.Size = UDim2.new(1, -24, 1, -100)
-    SettingsContainer.Position = UDim2.new(0, 12, 0, 80)
-    SettingsContainer.BackgroundTransparency = 1
-    SettingsContainer.BorderSizePixel = 0
-    SettingsContainer.ScrollBarThickness = 6
-    SettingsContainer.ScrollBarImageColor3 = DESIGN.Accent
-    SettingsContainer.CanvasSize = UDim2.new(0, 0, 0, 900)  -- Увеличено для контента
-    SettingsContainer.Parent = MainWindow
+local LeftButton = Instance.new("TextButton")
+LeftButton.Size = UDim2.new(0, 34, 0, 34)
+LeftButton.Position = UDim2.new(0.35, 0, 0, 58)
+LeftButton.BackgroundColor3 = DESIGN.Secondary
+LeftButton.Text = "<"
+LeftButton.TextColor3 = DESIGN.Text
+LeftButton.TextSize = 18
+LeftButton.Parent = MainFrame
+AddHoverEffect(LeftButton, DESIGN.Secondary)
 
-    local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 12)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = SettingsContainer
+local RightButton = Instance.new("TextButton")
+RightButton.Size = UDim2.new(0, 34, 0, 34)
+RightButton.Position = UDim2.new(0.65, 0, 0, 58)
+RightButton.BackgroundColor3 = DESIGN.Secondary
+RightButton.Text = ">"
+RightButton.TextColor3 = DESIGN.Text
+RightButton.TextSize = 18
+RightButton.Parent = MainFrame
+AddHoverEffect(RightButton, DESIGN.Secondary)
 
-    -- Функции создания элементов (toggle, slider, button, dropdown, section) — оставлены без изменений
-    -- (весь код из вашего оригинала, только с мелкими улучшениями в hover)
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 220, 0, 40)
+ToggleButton.Position = UDim2.new(0.5, -110, 1, -60)
+ToggleButton.BackgroundColor3 = DESIGN.Success
+ToggleButton.Text = "Start Farm"
+ToggleButton.TextColor3 = Color3.new(1,1,1)
+ToggleButton.TextSize = 18
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Parent = MainFrame
 
-    local function createSection(title, icon)
-        local sectionFrame = Instance.new("Frame")
-        sectionFrame.Size = UDim2.new(1, 0, 0, DESIGN.SectionHeight + 100)
-        sectionFrame.BackgroundColor3 = DESIGN.Secondary
-        sectionFrame.BorderSizePixel = 0
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 12)
+ToggleCorner.Parent = ToggleButton
+AddHoverEffect(ToggleButton, DESIGN.Success)
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 12)
-        corner.Parent = sectionFrame
+-- Анимация появления
+MainFrame.BackgroundTransparency = 1
+MainFrame.Size = UDim2.new(0, 0, 0, 0)
+Tween(MainFrame, {BackgroundTransparency = 0, Size = UDim2.new(0, 260, 0, 180)}, 0.4)
 
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = DESIGN.Accent:Lerp(Color3.fromRGB(255, 255, 255), 0.1)
-        stroke.Thickness = 1
-        stroke.Transparency = 0.7
-        stroke.Parent = sectionFrame
+-- Перетаскивание
+local dragging = false
+local dragInput, dragStart, startPos
 
-        local header = Instance.new("Frame")
-        header.Size = UDim2.new(1, -16, 0, DESIGN.SectionHeight)
-        header.Position = UDim2.new(0, 8, 0, 8)
-        header.BackgroundTransparency = 1
-        header.Parent = sectionFrame
-
-        local iconLabel = Instance.new("TextLabel")
-        iconLabel.Size = UDim2.new(0, 24, 0, 24)
-        iconLabel.BackgroundTransparency = 1
-        iconLabel.Text = icon or "•"
-        iconLabel.TextColor3 = DESIGN.Accent
-        iconLabel.TextSize = 16
-        iconLabel.Parent = header
-
-        local titleLabel = Instance.new("TextLabel")
-        titleLabel.Size = UDim2.new(1, -30, 1, 0)
-        titleLabel.Position = UDim2.new(0, 30, 0, 0)
-        titleLabel.BackgroundTransparency = 1
-        titleLabel.Text = title
-        titleLabel.TextColor3 = DESIGN.Text
-        titleLabel.TextSize = 16
-        titleLabel.Font = Enum.Font.GothamBold
-        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        titleLabel.Parent = header
-
-        local container = Instance.new("Frame")
-        container.Size = UDim2.new(1, -16, 1, -DESIGN.SectionHeight - 16)
-        container.Position = UDim2.new(0, 8, 0, DESIGN.SectionHeight + 8)
-        container.BackgroundTransparency = 1
-        container.Parent = sectionFrame
-
-        local clayout = Instance.new("UIListLayout")
-        clayout.Padding = UDim.new(0, 10)
-        clayout.Parent = container
-
-        return {Frame = sectionFrame, Container = container}
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
     end
+end)
 
-    local function createToggle(label, default, callback)
-        -- (полный код тоггла из вашего скрипта — без изменений)
-        -- Чтобы не удлинять ответ, оставляю как есть — он рабочий
-        local toggleFrame = Instance.new("Frame")
-        toggleFrame.Size = UDim2.new(1, 0, 0, 32)
-        toggleFrame.BackgroundTransparency = 1
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
 
-        local toggleLabel = Instance.new("TextLabel")
-        toggleLabel.Size = UDim2.new(0.7, 0, 1, 0)
-        toggleLabel.BackgroundTransparency = 1
-        toggleLabel.Text = label
-        toggleLabel.TextColor3 = DESIGN.Text
-        toggleLabel.TextSize = 14
-        toggleLabel.Font = Enum.Font.Gotham
-        toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        toggleLabel.Parent = toggleFrame
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
 
-        local toggleButton = Instance.new("TextButton")
-        toggleButton.Size = UDim2.new(0, 50, 0, 26)
-        toggleButton.Position = UDim2.new(1, -50, 0.5, -13)
-        toggleButton.BackgroundColor3 = default and DESIGN.Success or DESIGN.Secondary
-        toggleButton.Text = ""
-        toggleButton.AutoButtonColor = false
-        toggleButton.Parent = toggleFrame
+-- Логика кнопок
+StageBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local val = tonumber(StageBox.Text)
+        if val and val >= 1 and val <= MaxStage then
+            Stage = val
+        else
+            StageBox.Text = tostring(Stage)
+        end
+    end
+end)
 
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(1, 0)
-        corner.Parent = toggleButton
+LeftButton.MouseButton1Click:Connect(function()
+    if Stage > 1 then Stage -= 1 StageBox.Text = tostring(Stage) end
+end)
 
-        local circle = Instance.new("Frame")
-        circle.Size = UDim2.new(0, 20, 0, 20)
-        circle.Position = default and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
-        circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        circle.Parent = toggleButton
+RightButton.MouseButton1Click:Connect(function()
+    if Stage < MaxStage then Stage += 1 StageBox.Text = tostring(Stage) end
+end)
 
-        local ccorner = Instance.new("UICorner")
-        ccorner.CornerRadius = UDim.new(1, 0)
-        ccorner.Parent = circle
+local function GetHumanoidRootPart()
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
+end
 
-        local state = default
+local function Teleport(cf)
+    local root = GetHumanoidRootPart()
+    if root then root.CFrame = cf end
+end
 
-        local function update()
-            if state then
-                Animation:Tween(toggleButton, {BackgroundColor3 = DESIGN.Success})
-                Animation:Tween(circle, {Position = UDim2.new(1, -23, 0.5, -10)})
-            else
-                Animation:Tween(toggleButton, {BackgroundColor3 = DESIGN.Secondary})
-                Animation:Tween(circle, {Position = UDim2.new(0, 3, 0.5, -10)})
+local function CollectOrbs()
+    local boosts = workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("Stages") and workspace.Map.Stages:FindFirstChild("Boosts")
+    if not boosts then return end
+    local stageFolder = boosts:FindFirstChild(tostring(Stage))
+    if not stageFolder then return end
+
+    for _, model in ipairs(stageFolder:GetChildren()) do
+        if not Running then break end
+        for _, orb in ipairs(model:GetDescendants()) do
+            if not Running then break end
+            if orb:IsA("BasePart") then
+                Teleport(orb.CFrame)
+                task.wait(0.25)
             end
         end
-
-        toggleButton.MouseButton1Click:Connect(function()
-            state = not state
-            update()
-            if callback then callback(state) end
-        end)
-
-        Animation:ButtonHoverEffect(toggleButton)
-        return toggleFrame
     end
-
-    -- Аналогично для createSlider, createButton, createDropdown — код полностью сохранён из вашего оригинала
-
-    -- Создание секций (пример)
-    local graphicsSection = createSection("Графика", "🖥️")
-    graphicsSection.Frame.Parent = SettingsContainer
-    createToggle("Тени", true, function(v) print("Тени:", v) end).Parent = graphicsSection.Container
-
-    local gameplaySection = createSection("Геймплей", "🎮")
-    gameplaySection.Frame.Parent = SettingsContainer
-
-    -- Анимация появления
-    MainWindow.Size = UDim2.new(0, 0, 0, 0)
-    MainWindow.Position = UDim2.new(0.5, 0, 0.5, 0)
-    MainWindow.BackgroundTransparency = 1
-
-    task.wait(0.1)
-
-    Animation:Tween(MainWindow, {
-        Size = UDim2.new(0, DESIGN.WindowWidth, 0, 480),
-        Position = UDim2.new(0.5, -DESIGN.WindowWidth/2, 0.5, -240),
-        BackgroundTransparency = 0
-    }, 0.4)
-
-    -- Закрытие
-    CloseButton.MouseButton1Click:Connect(function()
-        Animation:Tween(MainWindow, {
-            Size = UDim2.new(0, 0, 0, 0),
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-            BackgroundTransparency = 1
-        }, 0.3)
-
-        Animation:Tween(BackgroundOverlay, {BackgroundTransparency = 1}, 0.3)
-
-        task.wait(0.35)
-        ScreenGui:Destroy()
-    end)
-
-    -- Перетаскивание
-    local dragging = false
-    local dragStart, startPos
-
-    TitleBar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            dragStart = input.Position
-            startPos = MainWindow.Position
-        end
-    end)
-
-    TitleBar.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local delta = input.Position - dragStart
-            MainWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-        end
-    end)
-
-    -- Клик по фону — закрытие
-    BackgroundOverlay.MouseButton1Click:Connect(function()
-        CloseButton.MouseButton1Click:Fire()
-    end)
-
-    -- ВАЖНО: Правильный Parent
-    ScreenGui.Parent = CoreGui
-
-    return ScreenGui
 end
 
--- Запуск
-createEnhancedInterface()
+ToggleButton.MouseButton1Click:Connect(function()
+    Running = not Running
+    if Running then
+        ToggleButton.Text = "Stop Farm"
+        ToggleButton.BackgroundColor3 = DESIGN.Danger
+        AddHoverEffect(ToggleButton, DESIGN.Danger)
+        task.spawn(function()
+            while Running do
+                CollectOrbs()
+                task.wait()
+            end
+        end)
+    else
+        ToggleButton.Text = "Start Farm"
+        ToggleButton.BackgroundColor3 = DESIGN.Success
+        AddHoverEffect(ToggleButton, DESIGN.Success)
+    end
+end)
 
-print("[STIDEV] Enhanced Settings Menu v" .. STIDEV.Version .. " loaded successfully!")
-print("[STIDEV] Theme: " .. STIDEV.Theme)
+CloseButton.MouseButton1Click:Connect(function()
+    Tween(MainFrame, {BackgroundTransparency = 1, Size = UDim2.new(0,0,0,0)}, 0.3)
+    task.wait(0.3)
+    ScreenGui:Destroy()
+end)
+
+-- Запуск в PlayerGui (работает в 2025)
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Уведомление
+StarterGui:SetCore("SendNotification", {
+    Title = "STIDEV Orb Farm",
+    Text = "Teleport to your world, then set stage and start!",
+    Duration = 8
+})
+
+print("[STIDEV] Beautiful Orb Farm UI loaded!")

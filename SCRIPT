@@ -1,432 +1,411 @@
---[[
-    FIX SCREEN RESOLUTION SCRIPT
-    Исправляет мобильное разрешение, возвращает нормальный ПК вид
-]]
+if script_loaded then warn("Script is already loaded, please rejoin the game to load it again.") return end pcall(function() getgenv().script_loaded = true end)
+warn("Loading...")
+local Library = loadstring(game:HttpGetAsync("https://github.com/ActualMasterOogway/Fluent-Renewed/releases/latest/download/Fluent.luau"))()
+local SaveManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/SaveManager.luau"))()
+local InterfaceManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/ActualMasterOogway/Fluent-Renewed/master/Addons/InterfaceManager.luau"))()
 
--- Сохраняем оригинальные функции
-local originalCreate = Instance.new
-local originalScreenGui = game:GetService("CoreGui")
+local w = Library:CreateWindow{
+    Title = "untitled drill game",
+    SubTitle = "by Bac0nH1ckOff",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(830, 525),
+    Resize = true,
+    MinSize = Vector2.new(470, 380),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+}
 
--- Узнаем текущее разрешение
-local function getCurrentResolution()
-    local viewportSize = workspace.CurrentCamera.ViewportSize
-    return viewportSize.X, viewportSize.Y
-end
-
--- Проверяем, мобильный ли режим
-local function isMobileResolution()
-    local x, y = getCurrentResolution()
-    local aspectRatio = x / y
-    
-    -- Мобильные аспекты: 9:16 (0.5625), 3:4 (0.75)
-    -- ПК аспекты: 16:9 (1.777), 4:3 (1.333)
-    if aspectRatio < 1 then
-        return true, "Мобильный режим обнаружен: " .. math.floor(x) .. "x" .. math.floor(y) .. " (Соотношение: " .. string.format("%.2f", aspectRatio) .. ")"
-    end
-    return false, "ПК режим: " .. math.floor(x) .. "x" .. math.floor(y)
-end
-
--- Основная функция исправления
-local function fixScreenResolution()
-    print("=== ИСПРАВЛЕНИЕ РАЗРЕШЕНИЯ ЭКРАНА ===")
-    
-    -- Получаем информацию о разрешении
-    local isMobile, resolutionInfo = isMobileResolution()
-    print(resolutionInfo)
-    
-    if not isMobile then
-        print("✅ Разрешение уже в ПК режиме")
-        return true
-    end
-    
-    print("🔄 Исправляю разрешение...")
-    
-    -- Способ 1: Изменение через CoreGui
-    pcall(function()
-        -- Пытаемся изменить свойства интерфейса
-        for _, gui in pairs(game:GetService("CoreGui"):GetChildren()) do
-            if gui:IsA("ScreenGui") then
-                -- Устанавливаем нормальные Scale
-                gui.ResetOnSpawn = false
-                
-                -- Исправляем Scaled
-                if gui:FindFirstChild("Scale") then
-                    gui.Scale = 1
-                end
-            end
-        end
-    end)
-    
-    -- Способ 2: Изменение настроек камеры
-    pcall(function()
-        local camera = workspace.CurrentCamera
-        if camera then
-            -- Пытаемся изменить FieldOfView
-            camera.FieldOfView = 70 -- Стандартное значение для ПК
-            
-            -- Сбрасываем ViewportSize если возможно
-            camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-                -- Мониторим изменения
-            end)
-        end
-    end)
-    
-    -- Способ 3: Инжект CSS/стилей для браузера
-    local function injectBrowserFix()
-        local html = [[
-        <script>
-            // Исправление viewport мета-тега
-            var viewportMeta = document.querySelector('meta[name="viewport"]');
-            if (viewportMeta) {
-                viewportMeta.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no";
-            }
-            
-            // Принудительное установление размеров
-            function forceDesktopSize() {
-                // Устанавливаем минимальную ширину как у ПК
-                document.body.style.minWidth = "1280px";
-                document.body.style.minHeight = "720px";
-                
-                // Отключаем touch события
-                document.body.style.touchAction = "none";
-                
-                // Исправляем масштабирование
-                document.body.style.zoom = "1";
-                
-                console.log("Разрешение исправлено на ПК режим");
-            }
-            
-            // Выполняем при загрузке и при изменении размера
-            window.addEventListener('load', forceDesktopSize);
-            window.addEventListener('resize', forceDesktopSize);
-            
-            // Принудительный перезапуск через 2 секунды
-            setTimeout(function() {
-                location.reload();
-            }, 2000);
-        </script>
-        ]]
-        
-        -- Пытаемся вставить HTML в игровой интерфейс
-        pcall(function()
-            local webFrame = Instance.new("Frame")
-            webFrame.Name = "ResolutionFixFrame"
-            webFrame.Size = UDim2.new(1, 0, 1, 0)
-            webFrame.BackgroundTransparency = 1
-            webFrame.Parent = game:GetService("CoreGui")
-        end)
-    end
-    
-    -- Способ 4: Исправление через UserSettings (если доступно)
-    pcall(function()
-        local UserSettings = UserSettings()
-        if UserSettings then
-            local GameSettings = UserSettings:GetService("UserGameSettings")
-            if GameSettings then
-                -- Пробуем изменить настройки
-                GameSettings:SetHardwareMouse(false)
-                GameSettings.SavedQualityLevel = Enum.SavedQualitySetting.High
-            end
-        end
-    end)
-    
-    -- Способ 5: Создание фиктивного экрана для "обмана" системы
-    local function createDummyScreen()
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "ResolutionOverride"
-        screenGui.DisplayOrder = 9999
-        screenGui.ResetOnSpawn = false
-        screenGui.IgnoreGuiInset = true
-        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        
-        -- Создаем полноэкранный фрейм
-        local mainFrame = Instance.new("Frame")
-        mainFrame.Size = UDim2.new(1, 0, 1, 0)
-        mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-        mainFrame.BackgroundTransparency = 1 -- Полностью прозрачный
-        mainFrame.BorderSizePixel = 0
-        mainFrame.Parent = screenGui
-        
-        -- Добавляем невидимые элементы для фиксации размеров
-        local aspectFrame = Instance.new("Frame")
-        aspectFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-        aspectFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-        aspectFrame.Size = UDim2.new(0.8, 0, 0.6, 0) -- 16:9 соотношение
-        aspectFrame.BackgroundTransparency = 1
-        aspectFrame.Parent = mainFrame
-        
-        screenGui.Parent = game:GetService("CoreGui")
-        return screenGui
-    end
-    
-    -- Способ 6: Смена UserAgent (имитация ПК браузера)
-    local function spoofUserAgent()
-        local httpService = game:GetService("HttpService")
-        local success, result = pcall(function()
-            -- Пытаемся отправить запрос с измененным User-Agent
-            return httpService:RequestAsync({
-                Url = "https://httpbin.org/user-agent",
-                Method = "GET",
-                Headers = {
-                    ["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-            })
-        end)
-        
-        if success then
-            print("✅ User-Agent изменен на ПК версию")
-        end
-    end
-    
-    -- Запускаем все методы исправления
-    print("🛠️ Применяю методы исправления...")
-    
-    -- Создаем фиктивный экран
-    local dummyScreen = createDummyScreen()
-    print("✅ Создан overlay для коррекции разрешения")
-    
-    -- Пытаемся испорчить UserAgent
-    spoofUserAgent()
-    
-    -- Пытаемся внедрить браузерный фикс
-    injectBrowserFix()
-    
-    -- Принудительное изменение интерфейса
-    pcall(function()
-        -- Ищем все ScreenGui и исправляем их
-        local screenGuis = {}
-        
-        -- Собираем все ScreenGui
-        for _, parent in pairs({game:GetService("CoreGui"), game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")}) do
-            for _, gui in pairs(parent:GetChildren()) do
-                if gui:IsA("ScreenGui") then
-                    table.insert(screenGuis, gui)
-                end
-            end
-        end
-        
-        -- Исправляем каждый ScreenGui
-        for _, gui in pairs(screenGuis) do
-            -- Устанавливаем правильный Scaling
-            gui.ResetOnSpawn = false
-            gui.IgnoreGuiInset = false
-            
-            -- Исправляем все элементы внутри
-            local function fixElements(element)
-                -- Исправляем UDim2 для ПК
-                if element:IsA("GuiObject") then
-                    -- Корректируем размеры
-                    local size = element.Size
-                    local position = element.Position
-                    
-                    -- Конвертируем в абсолютные значения
-                    element.Size = UDim2.new(
-                        size.X.Scale,
-                        math.max(size.X.Offset, 50), -- Минимальная ширина
-                        size.Y.Scale,
-                        math.max(size.Y.Offset, 50)  -- Минимальная высота
-                    )
-                end
-                
-                -- Рекурсивно исправляем детей
-                for _, child in pairs(element:GetChildren()) do
-                    fixElements(child)
-                end
-            end
-            
-            fixElements(gui)
-        end
-    end)
-    
-    -- Финальная проверка
-    task.wait(1) -- Ждем применения изменений
-    
-    local isStillMobile, finalResolution = isMobileResolution()
-    if isStillMobile then
-        print("⚠️ Не удалось полностью исправить. Применяю радикальный метод...")
-        
-        -- Радикальный метод: перезагрузка интерфейса
-        pcall(function()
-            -- Сохраняем важные данные
-            local importantGuis = {}
-            
-            -- Удаляем и пересоздаем интерфейс
-            for _, gui in pairs(game:GetService("CoreGui"):GetChildren()) do
-                if gui.Name ~= "ResolutionOverride" then
-                    gui:Destroy()
-                end
-            end
-            
-            -- Перезагружаем PlayerGui
-            game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui"):ClearAllChildren()
-            
-            print("✅ Интерфейс перезагружен")
-        end)
-    end
-    
-    print("🎯 Финальное разрешение: " .. finalResolution)
-    print("✅ Исправление завершено!")
-    
-    -- Создаем GUI для управления разрешением
-    createResolutionGUI()
-    
-    return true
-end
-
--- GUI для ручной настройки
-local function createResolutionGUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "ResolutionControl"
-    screenGui.ResetOnSpawn = false
-    screenGui.DisplayOrder = 10000
-    
-    -- Основное окно
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 300, 0, 250)
-    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -125)
-    mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
-    
-    -- Заголовок
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.Text = "🖥️ КОНТРОЛЬ РАЗРЕШЕНИЯ"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 18
-    title.Parent = mainFrame
-    
-    -- Текущее разрешение
-    local currentRes = Instance.new("TextLabel")
-    currentRes.Size = UDim2.new(1, -20, 0, 30)
-    currentRes.Position = UDim2.new(0, 10, 0, 50)
-    currentRes.Text = "Текущее: " .. getCurrentResolution()
-    currentRes.TextColor3 = Color3.fromRGB(200, 200, 200)
-    currentRes.BackgroundTransparency = 1
-    currentRes.Font = Enum.Font.SourceSans
-    currentRes.TextSize = 14
-    currentRes.Parent = mainFrame
-    
-    -- Кнопки предустановок
-    local resolutions = {
-        {"HD (1280x720)", 1280, 720},
-        {"Full HD (1920x1080)", 1920, 1080},
-        {"2K (2560x1440)", 2560, 1440},
-        {"4K (3840x2160)", 3840, 2160}
+local Tabs = {
+    Main = w:CreateTab{
+        Title = "Main",
+        Icon = "house"
+    },
+    Farm = w:CreateTab{
+        Title = "Farm",
+        Icon = "tractor"
+    },
+    Settings = w:CreateTab{
+        Title = "Settings",
+        Icon = "settings"
     }
-    
-    for i, res in ipairs(resolutions) do
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(0.9, 0, 0, 30)
-        button.Position = UDim2.new(0.05, 0, 0.25 + (i * 0.15), 0)
-        button.Text = res[1]
-        button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        button.Font = Enum.Font.SourceSans
-        button.TextSize = 14
-        button.Parent = mainFrame
-        
-        button.MouseButton1Click:Connect(function()
-            -- Здесь код для изменения разрешения
-            print("Выбрано разрешение: " .. res[1])
-            currentRes.Text = "Установлено: " .. res[1]
-        end)
-    end
-    
-    -- Кнопка автоисправления
-    local fixButton = Instance.new("TextButton")
-    fixButton.Size = UDim2.new(0.9, 0, 0, 40)
-    fixButton.Position = UDim2.new(0.05, 0, 0.85, 0)
-    fixButton.Text = "🔄 АВТОИСПРАВЛЕНИЕ"
-    fixButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    fixButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-    fixButton.Font = Enum.Font.SourceSansBold
-    fixButton.TextSize = 16
-    fixButton.Parent = mainFrame
-    
-    fixButton.MouseButton1Click:Connect(function()
-        fixScreenResolution()
-    end)
-    
-    screenGui.Parent = game:GetService("CoreGui")
-    
-    return screenGui
-end
+}
 
--- Автоматический запуск при старте
-local function autoFixOnStart()
-    -- Ждем полной загрузки игры
-    wait(3)
-    
-    -- Проверяем разрешение
-    local isMobile, info = isMobileResolution()
-    print(info)
-    
-    if isMobile then
-        print("📱 Обнаружено мобильное разрешение. Исправляю...")
-        fixScreenResolution()
-    else
-        print("✅ Разрешение в норме. Создаю панель управления...")
-        createResolutionGUI()
-    end
-end
+local Options = Library.Options
 
--- Запускаем автоматическое исправление
-spawn(autoFixOnStart)
+local players = game:GetService("Players")
+local plr = players.LocalPlayer
+local sellPart = workspace:FindFirstChild("Scripted"):FindFirstChild("Sell")
+local drillsUi = plr.PlayerGui:FindFirstChild("Menu"):FindFirstChild("CanvasGroup").Buy
+local handdrillsUi = plr.PlayerGui:FindFirstChild("Menu"):FindFirstChild("CanvasGroup").HandDrills
+local plot = nil
 
--- Команды для чата
-local function setupChatCommands()
-    local chatService = game:GetService("TextChatService")
-    local players = game:GetService("Players")
-    local localPlayer = players.LocalPlayer
-    
-    -- Команда /fixscreen
-    localPlayer.Chatted:Connect(function(message)
-        if string.lower(message) == "/fixscreen" then
-            fixScreenResolution()
-        elseif string.lower(message) == "/resolution" then
-            createResolutionGUI()
+-- // Get Player Plot
+if plr then
+    for _, p in ipairs(workspace.Plots:GetChildren()) do
+        if p:FindFirstChild("Owner") and p.Owner.Value == plr then
+            plot = p
+            break
         end
-    end)
+    end
 end
 
--- Запускаем команды чата
-setupChatCommands()
+-- // Sell Logic
+local function sell()
+    local wasDrillsUiOpen = drillsUi.Visible
+    local wasHandDrillsUiOpen = handdrillsUi.Visible
 
--- Хоткей для быстрого исправления (F11)
-local UserInputService = game:GetService("UserInputService")
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed then
-        if input.KeyCode == Enum.KeyCode.F11 then
-            fixScreenResolution()
-        elseif input.KeyCode == Enum.KeyCode.F12 then
-            -- Переключатель GUI
-            local controlGui = game:GetService("CoreGui"):FindFirstChild("ResolutionControl")
-            if controlGui then
-                controlGui.Enabled = not controlGui.Enabled
+    drillsUi.Visible = false
+    handdrillsUi.Visible = false
+    
+    lastPos = plr.Character:FindFirstChild("HumanoidRootPart").CFrame
+    plr.Character:FindFirstChild("HumanoidRootPart").CFrame = sellPart.CFrame
+    task.wait(0.2)
+
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local Knit = require(ReplicatedStorage.Packages:WaitForChild("Knit"))
+    local OreService = Knit.GetService("OreService")
+
+    OreService.SellAll:Fire()
+    task.wait(0.2)
+
+    if lastPos and lastPos ~= nil then
+        plr.Character:FindFirstChild("HumanoidRootPart").CFrame = lastPos
+    end
+
+    if wasDrillsUiOpen then
+        drillsUi.Visible = true
+        Options.drillsUI:SetValue(true)
+    end
+
+    if wasHandDrillsUiOpen then
+        handdrillsUi.Visible = true
+        Options.handdrillsUI:SetValue(true)
+    end
+end
+-- // Player List
+
+local function updatePlayerList()
+    playerList = {}
+    for _, v in ipairs(players:GetPlayers()) do
+        if v ~= plr then
+            table.insert(playerList, v.Name)
+        end
+    end
+    Options.players:SetValues(playerList)
+end
+
+players.PlayerAdded:Connect(function()
+    updatePlayerList()
+end)
+
+players.PlayerRemoving:Connect(function()
+    updatePlayerList()
+end)
+
+--// Main
+local drillsUI = Tabs.Main:CreateToggle("drillsUI", {Title = "Open Drills UI", Default = false })
+local handdrillsUI = Tabs.Main:CreateToggle("handdrillsUI", {Title = "Open HandDrills UI", Default = false })
+drillsUI:OnChanged(function()
+    if Options.drillsUI.Value then
+        Options.handdrillsUI:SetValue(false)
+    end
+    drillsUi.Visible = Options.drillsUI.Value
+end)
+drillsUi:GetPropertyChangedSignal("Visible"):Connect(function()
+    if not drillsUi.Visible then
+        Options.drillsUI:SetValue(false)
+    end
+end)
+handdrillsUI:OnChanged(function()
+    if Options.handdrillsUI.Value then
+        Options.drillsUI:SetValue(false)
+    end
+    handdrillsUi.Visible = Options.handdrillsUI.Value
+end)
+handdrillsUi:GetPropertyChangedSignal("Visible"):Connect(function()
+    if not handdrillsUi.Visible then
+        Options.handdrillsUI:SetValue(false)
+    end
+end)
+local choosenPlayer = nil
+local playersDropdown = Tabs.Main:CreateDropdown("players", {
+    Title = "Choose Players",
+    Values = {},
+    Multi = false
+})
+playersDropdown:OnChanged(function(Value)
+    choosenPlayer = Value
+end)
+updatePlayerList()
+Tabs.Main:CreateButton{
+    Title = "Teleport to Player",
+    Description = "Teleport to the selected player",
+    Callback = function()
+        if choosenPlayer then
+            local targetPlayer = players:FindFirstChild(choosenPlayer)
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                local targetPosition = targetPlayer.Character.HumanoidRootPart.CFrame
+                if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                    plr.Character.HumanoidRootPart.CFrame = targetPosition
+                else
+                    Library:Notify{Title = "Error", Content = "Your character is missing HumanoidRootPart", Duration = 5}
+                end
+            else
+                Library:Notify{Title = "Error", Content = "Target player not found or invalid", Duration = 5}
             end
+        else
+            Library:Notify{Title = "Error", Content = "No player selected", Duration = 5}
         end
+    end
+}
+Tabs.Main:CreateButton{
+    Title = "Teleport to Player Plot",
+    Description = "Teleport to the selected player's plot",
+    Callback = function()
+        if choosenPlayer then
+            local targetPlayer = players:FindFirstChild(choosenPlayer)
+            if targetPlayer then
+                local targetPlot = nil
+                for _, p in ipairs(workspace.Plots:GetChildren()) do
+                    if p:FindFirstChild("Owner") and p.Owner.Value == targetPlayer then
+                        targetPlot = p
+                        break
+                    end
+                end
+
+                if targetPlot and targetPlot:FindFirstChild("PlotSpawn") then
+                    local plotCenter = targetPlot.PlotSpawn.CFrame
+                    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                        plr.Character.HumanoidRootPart.CFrame = plotCenter
+                    else
+                        Library:Notify{Title = "Error", Content = "Your character is missing HumanoidRootPart", Duration = 5}
+                    end
+                else
+                    Library:Notify{Title = "Error", Content = "Target player's plot not found or invalid", Duration = 5}
+                end
+            else
+                Library:Notify{Title = "Error", Content = "Target player not found", Duration = 5}
+            end
+        else
+            Library:Notify{Title = "Error", Content = "No player selected", Duration = 5}
+        end
+    end
+}
+Tabs.Main:CreateButton{
+    Title = "Anti AFK",
+    Description = "You won't get kicked in 20 minutes by afk",
+    Callback = function()
+        local bb = game:GetService("VirtualUser")
+        plr.Idled:Connect(
+            function()
+                bb:CaptureController()
+                bb:ClickButton2(Vector2.new())
+            end
+        )
+    end
+}
+
+-- // Farm
+local delay = 10
+local autodrill = Tabs.Farm:CreateToggle("autodrill", {Title = "Auto Drill", Default = false })
+local autopickup = Tabs.Farm:CreateToggle("autopickup", {Title = "Auto Drill Pickup", Default = false })
+Tabs.Farm:CreateButton{ Title = "Sell All", Description = "Sell ​​all ores", Callback = function() sell() end } 
+Tabs.Farm:CreateInput("selldelay", {Title="Auto Sell Delay", Default=tostring(delay), Placeholder=tostring(delay), Numeric=true, Finished=true, Callback=function(Value)local num=tonumber(Value) if num and num>=1 then delay=num else Library:Notify{Title="Warning", Content="Only numbers (1+)", Duration=5} end end})
+local autosell = Tabs.Farm:CreateToggle("autosell", {Title = "Auto Sell", Default = false })
+local autorebith = Tabs.Farm:CreateToggle("autorebith", {Title = "Auto Rebith", Default = false })
+Tabs.Farm:CreateParagraph("Paragraph", { Title = "Auto Collect", })
+local collectdrills = Tabs.Farm:CreateToggle("collectdrills", {Title = "Auto Collect Drills", Default = false })
+local collectstorages = Tabs.Farm:CreateToggle("collectstorage", {Title = "Auto Collect Storages", Default = false })
+Tabs.Farm:CreateParagraph("Paragraph", { Title = "-- Settings --", })
+local drillsfull = Tabs.Farm:CreateToggle("drillsfull", {Title = "If drill is full", Default = false })
+local drillsdelay = Tabs.Farm:CreateToggle("drillsdelay", {Title = "In ... seconds", Default = false })
+local delayDrills = 10
+Tabs.Farm:CreateInput("collectdrillsdelay", {Title="Drills Delay", Default=delayDrills, Placeholder=delayDrills, Numeric=true, Finished=true, Callback=function(Value) local num=tonumber(Value) if num and num>=1 then delayDrills=num else Library:Notify{Title="Warning", Content="Only numbers (1+)", Duration=5} end end})
+local storagesfull = Tabs.Farm:CreateToggle("storagesfull", {Title = "If storage is full", Default = false })
+local storagesdelay = Tabs.Farm:CreateToggle("storagesdelay", {Title = "In ... seconds", Default = false })
+local storDelay = 10
+Tabs.Farm:CreateInput("collectstoragesdelay", {Title="Storages Delay", Default=storDelay, Placeholder=storDelay, Numeric=true, Finished=true, Callback=function(Value) local num=tonumber(Value) if num and num>=1 then storDelay=num else Library:Notify{Title="Warning", Content="Only numbers (1+)", Duration=5} end end})
+
+autopickup:OnChanged(function() -- Options.autopickup.Value
+    if Options.autopickup.Value then
+        task.spawn(function ()
+            while Options.autopickup.Value do
+                local drill = (function ()
+                    for _, obj in pairs(plr.Character:GetChildren()) do
+                        if obj:GetAttribute("Type") == "HandDrill" then
+                            return obj
+                        end
+                    end
+                end)()
+                if not drill then
+                    for _, obj in pairs(plr.Backpack:GetChildren()) do
+                        if obj:GetAttribute("Type") == "HandDrill" then
+                            obj.Parent = plr.Character
+                            break
+                        end
+                    end
+                end
+                task.wait(2)
+            end
+        end)
     end
 end)
 
-print("=====================================")
-print("🖥️  СКРИПТ ИСПРАВЛЕНИЯ РАЗРЕШЕНИЯ ЗАГРУЖЕН")
-print("Команды:")
-print("/fixscreen - Автоматическое исправление")
-print("/resolution - Панель управления")
-print("F11 - Быстрое исправление")
-print("F12 - Показать/скрыть панель")
-print("=====================================")
+autodrill:OnChanged(function() -- Options.autodrill.Value
+    if Options.autodrill.Value then
+        task.spawn(function ()
+            while Options.autodrill.Value do
+                game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild(
+                    "Services"
+                ):WaitForChild("OreService"):WaitForChild("RE"):WaitForChild("RequestRandomOre"):FireServer()
+                task.wait(.01)
+            end
+        end)
+    end
+end)
+autosell:OnChanged(function() -- Options.autosell.Value
+    if Options.autosell.Value then
+        task.spawn(function ()
+            while Options.autosell.Value do
+                sell()
+                task.wait(delay)
+            end
+        end)
+    end
+end)
+autorebith:OnChanged(function() -- Options.autorebith.Value
+    if Options.autorebith.Value then
+        task.spawn(function ()
+            while Options.autorebith.Value do
+                game:GetService("ReplicatedStorage"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild(
+                    "RebirthService"
+                ):WaitForChild("RE"):WaitForChild("RebirthRequest"):FireServer()
+                task.wait(1)
+            end
+        end)
+    end
+end)
+collectdrills:OnChanged(function() -- Options.collectdrills.Value
+    if Options.collectdrills.Value then
+        task.spawn(function()
+            while Options.collectdrills.Value do
+                if plot and plot:FindFirstChild("Drills") then
+                    for _, drill in pairs(plot.Drills:GetChildren()) do
+                        if not Options.collectdrills.Value then break end
 
--- Возвращаем функции для ручного использования
-return {
-    fixScreen = fixScreenResolution,
-    getResolution = getCurrentResolution,
-    isMobileMode = isMobileResolution,
-    createControlPanel = createResolutionGUI
-}
+                        local drillData = drill:FindFirstChild("DrillData")
+                        local ores = drill:FindFirstChild("Ores")
+                        if drillData and ores then
+                            local capacity = drillData:FindFirstChild("Capacity")
+                            if capacity then
+                                local val = 0
+                                for _, ore in pairs(ores:GetChildren()) do
+                                    if ore:IsA("IntValue") or ore:IsA("NumberValue") then
+                                        val += ore.Value
+                                    end
+                                end
+                                if Options.drillsdelay.Value or not Options.drillsfull.Value or val >= capacity.Value then
+                                    game:GetService("ReplicatedStorage").Packages.Knit.Services.PlotService.RE.CollectDrill:FireServer(drill)
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(Options.drillsdelay.Value and delayDrills or 2)
+            end
+        end)
+    end
+end)
+collectstorages:OnChanged(function() -- Options.collectstorage.Value
+    if Options.collectstorage.Value then
+        task.spawn(function()
+            while Options.collectstorage.Value do
+                if plot and plot:FindFirstChild("Storage") then
+                    for _, storage in pairs(plot.Storage:GetChildren()) do
+                        if not Options.collectstorage.Value then break end
+
+                        local storageData = storage:FindFirstChild("DrillData")
+                        local storageOres = storage:FindFirstChild("Ores")
+                        if storageData and storageOres then
+                            local storageCapacity = storageData:FindFirstChild("Capacity")
+                            if storageCapacity then
+                                local storVal = 0
+                                for _, ore in pairs(storageOres:GetChildren()) do
+                                    if ore:IsA("IntValue") or ore:IsA("NumberValue") then
+                                        storVal += ore.Value
+                                    end
+                                end
+                                if (Options.storagesfull.Value and storVal >= storageCapacity.Value) or not Options.storagesfull.Value then
+                                    game:GetService("ReplicatedStorage").Packages.Knit.Services.PlotService.RE.CollectDrill:FireServer(storage)
+                                end
+                            end
+                        end
+                    end
+                end
+                task.wait(Options.storagesdelay.Value and storDelay or 2)
+            end
+        end)
+    end
+end)
+storagesfull:OnChanged(function()
+    if Options.storagesfull.Value and Options.storagesdelay.Value then
+        Options.storagesdelay:SetValue(false)
+    end
+end)
+storagesdelay:OnChanged(function()
+    if Options.storagesdelay.Value and Options.storagesfull.Value then
+        Options.storagesfull:SetValue(false)
+    end
+end)
+drillsfull:OnChanged(function()
+    if Options.drillsfull.Value and Options.drillsdelay.Value then
+        Options.drillsdelay:SetValue(false)
+    end
+end)
+drillsdelay:OnChanged(function()
+    if Options.drillsdelay.Value and Options.drillsfull.Value then
+        Options.drillsfull:SetValue(false)
+    end
+end)
+
+-- // Settings
+SaveManager:SetLibrary(Library)
+InterfaceManager:SetLibrary(Library)
+InterfaceManager:SetFolder("untitleddrillgame")
+SaveManager:SetFolder("untitleddrillgame/game")
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+w:SelectTab(1)
+SaveManager:LoadAutoloadConfig()
+warn("Loaded!")
+
+-- // Support me pls OwO
+local PATH, DIR, URL = "untitleddrillgame/support.txt", "untitleddrillgame", "https://www.roblox.com/games/126923867527251/Support-place"
+local state = isfile(PATH) and readfile(PATH) or "false"
+
+if state ~= "true" then
+    task.wait(math.random(600, 1200))
+
+    w:Dialog{
+        Title = "Support",
+        Content = "Do you want to support me? (A link to the game will be copied to your clipboard)",
+        Buttons = {
+            {
+                Title = "Confirm",
+                Callback = function()
+                    setclipboard(URL)
+                    if not isfolder(DIR) then makefolder(DIR) end
+                    writefile(PATH, "true")
+                end,
+            },
+            {
+                Title = "Cancel",
+                Callback = function()
+                    if not isfolder(DIR) then makefolder(DIR) end
+                    writefile(PATH, "true")
+                end,
+            },
+        },
+    }
+end

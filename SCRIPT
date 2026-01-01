@@ -1,225 +1,576 @@
-local Services = {
-    Players = game:GetService("Players"),
-    StarterGui = game:GetService("StarterGui")
-}
+-- SWILL Teleport Points v1.0
+-- Для исполнителя Delta
 
-local Player = Services.Players.LocalPlayer
-local Stage, Running = 1, false
-local MaxStage = 30
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local HttpService = game:GetService("HttpService")
 
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- Настройки
+local MaxSavedPoints = 10
+local TeleportKey = Enum.KeyCode.F
+local SaveKey = Enum.KeyCode.G
+local QuickTeleportKey = Enum.KeyCode.H
+
+-- Хранение точек
+local SavedPoints = {}
+local CurrentPointIndex = 1
+
+-- Автосохранение в DataStore (если доступно)
+local DataStoreName = "SWILL_TeleportPoints_" .. LocalPlayer.UserId
+local DataStore
+pcall(function()
+    DataStore = game:GetService("DataStoreService"):GetDataStore(DataStoreName)
+    
+    -- Попытка загрузить сохраненные точки
+    local success, savedData = pcall(function()
+        return DataStore:GetAsync("points")
+    end)
+    
+    if success and savedData then
+        SavedPoints = savedData
+        print("Загружено сохраненных точек: " .. #SavedPoints)
+    end
+end)
+
+-- Функция сохранения точки
+local function saveCurrentPosition(pointName)
+    if not Character or not HumanoidRootPart then return end
+    
+    if #SavedPoints >= MaxSavedPoints then
+        table.remove(SavedPoints, 1) -- Удаляем самую старую точку
+    end
+    
+    local position = HumanoidRootPart.Position
+    local rotation = HumanoidRootPart.CFrame - position
+    local timestamp = os.date("%H:%M:%S")
+    
+    local pointData = {
+        Name = pointName or "Точка " .. #SavedPoints + 1,
+        Position = {X = position.X, Y = position.Y, Z = position.Z},
+        Rotation = {rotation:GetComponents()},
+        Timestamp = timestamp,
+        Map = game.PlaceId,
+        Index = #SavedPoints + 1
+    }
+    
+    table.insert(SavedPoints, pointData)
+    
+    -- Сохранение в DataStore
+    if DataStore then
+        pcall(function()
+            DataStore:SetAsync("points", SavedPoints)
+        end)
+    end
+    
+    return pointData
+end
+
+-- Функция телепортации к точке
+local function teleportToPoint(pointIndex)
+    if not pointIndex or pointIndex < 1 or pointIndex > #SavedPoints then
+        return false
+    end
+    
+    local point = SavedPoints[pointIndex]
+    if not point then return false end
+    
+    local position = Vector3.new(point.Position.X, point.Position.Y, point.Position.Z)
+    local rotation = CFrame.new(unpack(point.Rotation))
+    
+    -- Визуальный эффект перед телепортацией
+    local effect = Instance.new("Part")
+    effect.Name = "SWILLTeleportEffect"
+    effect.Size = Vector3.new(3, 0.1, 3)
+    effect.Position = HumanoidRootPart.Position
+    effect.Transparency = 0.3
+    effect.Color = Color3.fromRGB(100, 200, 255)
+    effect.Material = Enum.Material.Neon
+    effect.Anchored = true
+    effect.CanCollide = false
+    effect.Parent = Workspace
+    
+    local ring = effect:Clone()
+    ring.Size = Vector3.new(5, 0.1, 5)
+    ring.Color = Color3.fromRGB(50, 150, 255)
+    ring.Parent = Workspace
+    
+    -- Телепортация
+    HumanoidRootPart.CFrame = CFrame.new(position) * rotation
+    
+    -- Эффект после телепортации
+    local afterEffect = effect:Clone()
+    afterEffect.Position = position
+    afterEffect.Parent = Workspace
+    
+    local afterRing = ring:Clone()
+    afterRing.Position = position
+    afterRing.Parent = Workspace
+    
+    -- Анимация исчезновения
+    spawn(function()
+        for i = 0.3, 1, 0.1 do
+            effect.Transparency = i
+            ring.Transparency = i
+            afterEffect.Transparency = i
+            afterRing.Transparency = i
+            wait(0.05)
+        end
+        effect:Destroy()
+        ring:Destroy()
+        afterEffect:Destroy()
+        afterRing:Destroy()
+    end)
+    
+    return true
+end
+
+-- Создание интерфейса
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
-local MainCorner = Instance.new("UICorner")
-local TitleBar = Instance.new("Frame")
-local TitleCorner = Instance.new("UICorner")
-local CloseButton = Instance.new("TextButton")
-local TitleLabel = Instance.new("TextLabel")
-local StageLabel = Instance.new("TextLabel")
-local StageBox = Instance.new("TextBox")
-local LeftButton = Instance.new("TextButton")
-local RightButton = Instance.new("TextButton")
-local ToggleButton = Instance.new("TextButton")
+local Title = Instance.new("TextLabel")
+local PointsList = Instance.new("ScrollingFrame")
+local SaveButton = Instance.new("TextButton")
+local TeleportButton = Instance.new("TextButton")
+local ClearButton = Instance.new("TextButton")
+local PointNameBox = Instance.new("TextBox")
+local QuickTeleportButton = Instance.new("TextButton")
+local StatusLabel = Instance.new("TextLabel")
 
-ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Name = "SWILLTeleportPointsGUI"
+ScreenGui.Parent = game.CoreGui
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-ScreenGui.ResetOnSpawn = false
 
+MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-MainFrame.BackgroundTransparency = 0.1
-MainFrame.Size = UDim2.new(0, 220, 0, 130)
-MainFrame.Position = UDim2.new(0.5, -110, 0.5, -65)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+MainFrame.BorderSizePixel = 0
+MainFrame.Position = UDim2.new(0.05, 0, 0.3, 0)
+MainFrame.Size = UDim2.new(0, 300, 0, 400)
+MainFrame.Active = true
+MainFrame.Draggable = true
 
-MainCorner.Parent = MainFrame
-MainCorner.CornerRadius = UDim.new(0, 6)
+Title.Name = "Title"
+Title.Parent = MainFrame
+Title.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+Title.BorderSizePixel = 0
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.Font = Enum.Font.SourceSansBold
+Title.Text = "TELEPORT POINTS"
+Title.TextColor3 = Color3.fromRGB(100, 200, 255)
+Title.TextSize = 16
 
-TitleBar.Parent = MainFrame
-TitleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-TitleBar.BackgroundTransparency = 0.1
-TitleBar.Size = UDim2.new(1, 0, 0, 28)
+PointsList.Name = "PointsList"
+PointsList.Parent = MainFrame
+PointsList.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+PointsList.BorderSizePixel = 0
+PointsList.Position = UDim2.new(0.05, 0, 0.1, 0)
+PointsList.Size = UDim2.new(0.9, 0, 0, 250)
+PointsList.ScrollBarThickness = 5
+PointsList.CanvasSize = UDim2.new(0, 0, 0, 0)
 
-TitleCorner.Parent = TitleBar
-TitleCorner.CornerRadius = UDim.new(0, 4)
+PointNameBox.Name = "PointNameBox"
+PointNameBox.Parent = MainFrame
+PointNameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+PointNameBox.BorderSizePixel = 0
+PointNameBox.Position = UDim2.new(0.05, 0, 0.75, 0)
+PointNameBox.Size = UDim2.new(0.6, 0, 0, 30)
+PointNameBox.Font = Enum.Font.SourceSans
+PointNameBox.PlaceholderText = "Название точки"
+PointNameBox.Text = ""
+PointNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+PointNameBox.TextSize = 14
 
-TitleLabel.Parent = TitleBar
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Position = UDim2.new(0, 8, 0, 0)
-TitleLabel.Size = UDim2.new(1, -16, 1, 0)
-TitleLabel.Font = Enum.Font.Code
-TitleLabel.Text = "No Limit Orb Farm | STIDEV"
-TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-TitleLabel.TextSize = 13
-TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+SaveButton.Name = "SaveButton"
+SaveButton.Parent = MainFrame
+SaveButton.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
+SaveButton.BorderSizePixel = 0
+SaveButton.Position = UDim2.new(0.7, 0, 0.75, 0)
+SaveButton.Size = UDim2.new(0.25, 0, 0, 30)
+SaveButton.Font = Enum.Font.SourceSansBold
+SaveButton.Text = "СОХРАНИТЬ"
+SaveButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SaveButton.TextSize = 14
 
-CloseButton.Parent = TitleBar
-CloseButton.BackgroundTransparency = 1
-CloseButton.Position = UDim2.new(1, -20, 0, 0)
-CloseButton.Size = UDim2.new(0, 20, 1, 0)
-CloseButton.Font = Enum.Font.Code
-CloseButton.Text = "×"
-CloseButton.TextColor3 = Color3.fromRGB(255, 0, 0)
-CloseButton.TextSize = 14
-CloseButton.AutoButtonColor = false
+TeleportButton.Name = "TeleportButton"
+TeleportButton.Parent = MainFrame
+TeleportButton.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
+TeleportButton.BorderSizePixel = 0
+TeleportButton.Position = UDim2.new(0.05, 0, 0.85, 0)
+TeleportButton.Size = UDim2.new(0.4, 0, 0, 30)
+TeleportButton.Font = Enum.Font.SourceSansBold
+TeleportButton.Text = "ТЕЛЕПОРТ (F)"
+TeleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+TeleportButton.TextSize = 14
 
-CloseButton.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
+QuickTeleportButton.Name = "QuickTeleportButton"
+QuickTeleportButton.Parent = MainFrame
+QuickTeleportButton.BackgroundColor3 = Color3.fromRGB(200, 150, 50)
+QuickTeleportButton.BorderSizePixel = 0
+QuickTeleportButton.Position = UDim2.new(0.5, 0, 0.85, 0)
+QuickTeleportButton.Size = UDim2.new(0.4, 0, 0, 30)
+QuickTeleportButton.Font = Enum.Font.SourceSansBold
+QuickTeleportButton.Text = "БЫСТРЫЙ (H)"
+QuickTeleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+QuickTeleportButton.TextSize = 14
 
-CloseButton.TouchTap:Connect(function()
-    ScreenGui:Destroy()
-end)
+ClearButton.Name = "ClearButton"
+ClearButton.Parent = MainFrame
+ClearButton.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+ClearButton.BorderSizePixel = 0
+ClearButton.Position = UDim2.new(0.05, 0, 0.92, 0)
+ClearButton.Size = UDim2.new(0.9, 0, 0, 25)
+ClearButton.Font = Enum.Font.SourceSansBold
+ClearButton.Text = "ОЧИСТИТЬ ВСЕ ТОЧКИ"
+ClearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ClearButton.TextSize = 14
 
-local function MakeDraggable(Frame, Bar)
-    local UserInput = game:GetService("UserInputService")
-    local Dragging, StartPos, DragStart, DragConnection
-    
-    Bar.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-            Dragging = true
-            DragStart = Input.Position
-            StartPos = Vector2.new(Frame.AbsolutePosition.X, Frame.AbsolutePosition.Y)
-            
-            DragConnection = UserInput.InputChanged:Connect(function(Changed)
-                if Dragging and (Changed.UserInputType == Enum.UserInputType.MouseMovement or Changed.UserInputType == Enum.UserInputType.Touch) then
-                    local Delta = Changed.Position - DragStart
-                    local Viewport = workspace.CurrentCamera.ViewportSize
-                    Frame.Position = UDim2.new(0, math.clamp(StartPos.X + Delta.X, 0, Viewport.X - Frame.AbsoluteSize.X), 0, math.clamp(StartPos.Y + Delta.Y, 0, Viewport.Y - Frame.AbsoluteSize.Y))
-                end
-            end)
-            
-            local EndConnection
-            EndConnection = UserInput.InputEnded:Connect(function(Ended)
-                if Ended.UserInputType == Enum.UserInputType.MouseButton1 or Ended.UserInputType == Enum.UserInputType.Touch then
-                    Dragging = false
-                    if DragConnection then
-                        DragConnection:Disconnect()
-                        DragConnection = nil
-                    end
-                    EndConnection:Disconnect()
-                end
-            end)
-        end
-    end)
-end
+StatusLabel.Name = "StatusLabel"
+StatusLabel.Parent = MainFrame
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Position = UDim2.new(0.05, 0, 0.68, 0)
+StatusLabel.Size = UDim2.new(0.9, 0, 0, 20)
+StatusLabel.Font = Enum.Font.SourceSans
+StatusLabel.Text = "Точек сохранено: 0"
+StatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+StatusLabel.TextSize = 14
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-MakeDraggable(MainFrame, TitleBar)
-
-StageLabel.Parent = MainFrame
-StageLabel.Size = UDim2.new(0, 70, 0, 18)
-StageLabel.Position = UDim2.new(0, 10, 0, 40)
-StageLabel.BackgroundTransparency = 1
-StageLabel.Font = Enum.Font.Code
-StageLabel.TextSize = 13
-StageLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-StageLabel.Text = "Stage:"
-
-LeftButton.Parent = MainFrame
-LeftButton.Size = UDim2.new(0, 25, 0, 22)
-LeftButton.Position = UDim2.new(0, 85, 0, 38)
-LeftButton.Text = "<"
-LeftButton.Font = Enum.Font.Code
-LeftButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-LeftButton.TextSize = 13
-LeftButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-
-StageBox.Parent = MainFrame
-StageBox.Size = UDim2.new(0, 50, 0, 22)
-StageBox.Position = UDim2.new(0, 115, 0, 38)
-StageBox.Text = "1"
-StageBox.ClearTextOnFocus = false
-StageBox.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-StageBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-StageBox.Font = Enum.Font.Code
-StageBox.TextSize = 13
-
-RightButton.Parent = MainFrame
-RightButton.Size = UDim2.new(0, 25, 0, 22)
-RightButton.Position = UDim2.new(0, 175, 0, 38)
-RightButton.Text = ">"
-RightButton.Font = Enum.Font.Code
-RightButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-RightButton.TextSize = 13
-RightButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-
-ToggleButton.Parent = MainFrame
-ToggleButton.Size = UDim2.new(0, 200, 0, 25)
-ToggleButton.Position = UDim2.new(0, 10, 0, 85)
-ToggleButton.Text = "Start"
-ToggleButton.Font = Enum.Font.Code
-ToggleButton.TextSize = 13
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-
-StageBox.FocusLost:Connect(function()
-    local Value = tonumber(StageBox.Text)
-    if Value and Value >= 1 and Value <= MaxStage then
-        Stage = Value
-    else
-        StageBox.Text = tostring(Stage)
-    end
-end)
-
-LeftButton.MouseButton1Click:Connect(function()
-    if Stage > 1 then
-        Stage = Stage - 1
-        StageBox.Text = tostring(Stage)
-    end
-end)
-
-RightButton.MouseButton1Click:Connect(function()
-    if Stage < MaxStage then
-        Stage = Stage + 1
-        StageBox.Text = tostring(Stage)
-    end
-end)
-
-local function GetHumanoidRootPart()
-    local Character = Player.Character or Player.CharacterAdded:Wait()
-    return Character:WaitForChild("HumanoidRootPart")
-end
-
-local function Teleport(CFrame)
-    local Root = GetHumanoidRootPart()
-    if Root then
-        Root.CFrame = CFrame
-    end
-end
-
-local function CollectOrbs()
-    local Boosts = workspace:WaitForChild("Map"):WaitForChild("Stages"):WaitForChild("Boosts")
-    local StageFolder = Boosts:FindFirstChild(tostring(Stage))
-    if not StageFolder then return end
-    
-    for _, Model in ipairs(StageFolder:GetChildren()) do
-        for _, Orb in ipairs(Model:GetDescendants()) do
-            if not Running then return end
-            if Orb:IsA("BasePart") then
-                Teleport(Orb.CFrame)
-                task.wait(0.25)
-            end
+-- Функция обновления списка точек
+local function updatePointsList()
+    -- Очистка старого списка
+    for _, child in ipairs(PointsList:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
         end
     end
-end
-
-ToggleButton.MouseButton1Click:Connect(function()
-    Running = not Running
-    if Running then
-        ToggleButton.Text = "Stop"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-        task.spawn(function()
-            while Running do
-                CollectOrbs()
-                task.wait(0.25)
+    
+    -- Создание новых элементов
+    local yOffset = 5
+    local itemHeight = 60
+    
+    for i, point in ipairs(SavedPoints) do
+        local pointFrame = Instance.new("Frame")
+        pointFrame.Name = "Point_" .. i
+        pointFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        pointFrame.BorderSizePixel = 0
+        pointFrame.Position = UDim2.new(0, 5, 0, yOffset)
+        pointFrame.Size = UDim2.new(1, -10, 0, itemHeight)
+        pointFrame.Parent = PointsList
+        
+        local pointName = Instance.new("TextLabel")
+        pointName.Name = "PointName"
+        pointName.Parent = pointFrame
+        pointName.BackgroundTransparency = 1
+        pointName.Position = UDim2.new(0, 5, 0, 5)
+        pointName.Size = UDim2.new(0.7, 0, 0, 20)
+        pointName.Font = Enum.Font.SourceSansBold
+        pointName.Text = point.Name .. " #" .. i
+        pointName.TextColor3 = Color3.fromRGB(100, 200, 255)
+        pointName.TextSize = 14
+        pointName.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local pointCoords = Instance.new("TextLabel")
+        pointCoords.Name = "PointCoords"
+        pointCoords.Parent = pointFrame
+        pointCoords.BackgroundTransparency = 1
+        pointCoords.Position = UDim2.new(0, 5, 0, 25)
+        pointCoords.Size = UDim2.new(0.7, 0, 0, 15)
+        pointCoords.Font = Enum.Font.SourceSans
+        pointCoords.Text = string.format("X:%.1f Y:%.1f Z:%.1f", 
+            point.Position.X, point.Position.Y, point.Position.Z)
+        pointCoords.TextColor3 = Color3.fromRGB(200, 200, 200)
+        pointCoords.TextSize = 12
+        pointCoords.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local pointTime = Instance.new("TextLabel")
+        pointTime.Name = "PointTime"
+        pointTime.Parent = pointFrame
+        pointTime.BackgroundTransparency = 1
+        pointTime.Position = UDim2.new(0, 5, 0, 40)
+        pointTime.Size = UDim2.new(0.7, 0, 0, 15)
+        pointTime.Font = Enum.Font.SourceSans
+        pointTime.Text = point.Timestamp
+        pointTime.TextColor3 = Color3.fromRGB(150, 150, 150)
+        pointTime.TextSize = 11
+        pointTime.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local teleportBtn = Instance.new("TextButton")
+        teleportBtn.Name = "TeleportBtn"
+        teleportBtn.Parent = pointFrame
+        teleportBtn.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
+        teleportBtn.BorderSizePixel = 0
+        teleportBtn.Position = UDim2.new(0.72, 0, 0.1, 0)
+        teleportBtn.Size = UDim2.new(0.25, 0, 0.35, 0)
+        teleportBtn.Font = Enum.Font.SourceSans
+        teleportBtn.Text = "ТП"
+        teleportBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        teleportBtn.TextSize = 12
+        
+        local deleteBtn = Instance.new("TextButton")
+        deleteBtn.Name = "DeleteBtn"
+        deleteBtn.Parent = pointFrame
+        deleteBtn.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+        deleteBtn.BorderSizePixel = 0
+        deleteBtn.Position = UDim2.new(0.72, 0, 0.55, 0)
+        deleteBtn.Size = UDim2.new(0.25, 0, 0.35, 0)
+        deleteBtn.Font = Enum.Font.SourceSans
+        deleteBtn.Text = "УДАЛИТЬ"
+        deleteBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        deleteBtn.TextSize = 12
+        
+        -- Обработчики событий
+        teleportBtn.MouseButton1Click:Connect(function()
+            CurrentPointIndex = i
+            teleportToPoint(i)
+        end)
+        
+        deleteBtn.MouseButton1Click:Connect(function()
+            table.remove(SavedPoints, i)
+            updatePointsList()
+            
+            -- Обновление DataStore
+            if DataStore then
+                pcall(function()
+                    DataStore:SetAsync("points", SavedPoints)
+                end
             end
         end)
-    else
-        ToggleButton.Text = "Start"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+        
+        yOffset = yOffset + itemHeight + 5
+    end
+    
+    -- Обновление размера CanvasSize
+    PointsList.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+    
+    -- Обновление статуса
+    StatusLabel.Text = "Точек сохранено: " .. #SavedPoints
+    StatusLabel.TextColor3 = #SavedPoints > 0 and Color3.fromRGB(100, 200, 100) or Color3.fromRGB(200, 200, 200)
+end
+
+-- Обработчики кнопок
+SaveButton.MouseButton1Click:Connect(function()
+    local pointName = PointNameBox.Text
+    if pointName == "" then
+        pointName = "Точка " .. (#SavedPoints + 1)
+    end
+    
+    local savedPoint = saveCurrentPosition(pointName)
+    if savedPoint then
+        PointNameBox.Text = ""
+        updatePointsList()
+        
+        -- Визуальная обратная связь
+        SaveButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+        wait(0.3)
+        SaveButton.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
     end
 end)
 
-Services.StarterGui:SetCore("SendNotification", {
-    Title = "Tip",
-    Text = "teleport to your world, then input your stage",
-    Duration = 5
-})
+TeleportButton.MouseButton1Click:Connect(function()
+    if #SavedPoints > 0 then
+        teleportToPoint(CurrentPointIndex)
+    end
+end)
+
+QuickTeleportButton.MouseButton1Click:Connect(function()
+    if #SavedPoints > 0 then
+        -- Циклическое переключение по точкам
+        CurrentPointIndex = CurrentPointIndex + 1
+        if CurrentPointIndex > #SavedPoints then
+            CurrentPointIndex = 1
+        end
+        
+        teleportToPoint(CurrentPointIndex)
+    end
+end)
+
+ClearButton.MouseButton1Click:Connect(function()
+    SavedPoints = {}
+    CurrentPointIndex = 1
+    updatePointsList()
+    
+    -- Очистка DataStore
+    if DataStore then
+        pcall(function()
+            DataStore:SetAsync("points", {})
+        end
+    end
+    
+    -- Визуальная обратная связь
+    ClearButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+    wait(0.3)
+    ClearButton.BackgroundColor3 = Color3.fromRGB(200, 80, 80)
+end)
+
+-- Горячие клавиши
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == SaveKey then
+        saveCurrentPosition("Быстрая точка " .. os.date("%H:%M:%S"))
+        updatePointsList()
+        
+    elseif input.KeyCode == TeleportKey then
+        if #SavedPoints > 0 then
+            teleportToPoint(CurrentPointIndex)
+        end
+        
+    elseif input.KeyCode == QuickTeleportKey then
+        if #SavedPoints > 0 then
+            CurrentPointIndex = CurrentPointIndex + 1
+            if CurrentPointIndex > #SavedPoints then
+                CurrentPointIndex = 1
+            end
+            teleportToPoint(CurrentPointIndex)
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.RightBracket then
+        if #SavedPoints > 0 then
+            CurrentPointIndex = math.min(CurrentPointIndex + 1, #SavedPoints)
+            StatusLabel.Text = "Выбрана точка: " .. CurrentPointIndex
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.LeftBracket then
+        if #SavedPoints > 0 then
+            CurrentPointIndex = math.max(CurrentPointIndex - 1, 1)
+            StatusLabel.Text = "Выбрана точка: " .. CurrentPointIndex
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.F9 then
+        -- Экспорт точек в консоль
+        print("=== SWILL Teleport Points Export ===")
+        for i, point in ipairs(SavedPoints) do
+            print(string.format("[%d] %s - X:%.1f Y:%.1f Z:%.1f (%s)", 
+                i, point.Name, point.Position.X, point.Position.Y, point.Position.Z, point.Timestamp))
+        end
+        
+    elseif input.KeyCode == Enum.KeyCode.F10 then
+        -- Очистка интерфейса
+        ScreenGui:Destroy()
+        print("SWILL Teleport Points отключен")
+    end
+end)
+
+-- Автосохранение при выходе
+game:BindToClose(function()
+    if DataStore and #SavedPoints > 0 then
+        pcall(function()
+            DataStore:SetAsync("points", SavedPoints)
+        end
+    end
+end)
+
+-- Инициализация
+updatePointsList()
+
+-- Обработка смены персонажа
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+end)
+
+print("SWILL Teleport Points активирован")
+print("Функции:")
+print("  • Сохраняйте точки с помощью кнопки или клавиши G")
+print("  • Телепортируйтесь к точкам клавишей F или через интерфейс")
+print("  • Быстрая циклическая телепортация клавишей H")
+print("  • Максимум " .. MaxSavedPoints .. " сохраненных точек")
+print("Горячие клавиши:")
+print("  [G] - Сохранить текущую позицию")
+print("  [F] - Телепорт к выбранной точке")
+print("  [H] - Быстрая телепортация (цикл по точкам)")
+print("  [[] и []] - Выбор точки")
+print("  [F9] - Экспорт точек в консоль")
+print("  [F10] - Удалить интерфейс")
+print("Интерфейс можно перетаскивать")
+print("Точки автоматически сохраняются между сессиями")
+
+-- Дополнительная функция: авточекер для обновления списка
+spawn(function()
+    while true do
+        if #SavedPoints > 0 then
+            StatusLabel.Text = "Точек сохранено: " .. #SavedPoints .. " (Текущая: " .. CurrentPointIndex .. ")"
+        end
+        wait(1)
+    end
+end)
+
+-- Добавляем быстрые кнопки для телепортации к последним точкам
+local function createQuickAccessButtons()
+    local QuickFrame = Instance.new("Frame")
+    QuickFrame.Name = "QuickAccessFrame"
+    QuickFrame.Parent = ScreenGui
+    QuickFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40, 0.8)
+    QuickFrame.BorderSizePixel = 0
+    QuickFrame.Position = UDim2.new(0.8, 0, 0.1, 0)
+    QuickFrame.Size = UDim2.new(0, 100, 0, 200)
+    QuickFrame.Active = true
+    QuickFrame.Draggable = true
+    
+    local QuickTitle = Instance.new("TextLabel")
+    QuickTitle.Name = "QuickTitle"
+    QuickTitle.Parent = QuickFrame
+    QuickTitle.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+    QuickTitle.BorderSizePixel = 0
+    QuickTitle.Size = UDim2.new(1, 0, 0, 25)
+    QuickTitle.Font = Enum.Font.SourceSansBold
+    QuickTitle.Text = "БЫСТРЫЙ ДОСТУП"
+    QuickTitle.TextColor3 = Color3.fromRGB(100, 200, 255)
+    QuickTitle.TextSize = 12
+    
+    -- Функция обновления быстрых кнопок
+    local function updateQuickButtons()
+        for _, child in ipairs(QuickFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+        
+        local yOffset = 30
+        for i = math.max(1, #SavedPoints - 4), #SavedPoints do
+            if i <= #SavedPoints then
+                local point = SavedPoints[i]
+                local quickBtn = Instance.new("TextButton")
+                quickBtn.Name = "QuickBtn_" .. i
+                quickBtn.Parent = QuickFrame
+                quickBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+                quickBtn.BorderSizePixel = 0
+                quickBtn.Position = UDim2.new(0.1, 0, 0, yOffset)
+                quickBtn.Size = UDim2.new(0.8, 0, 0, 30)
+                quickBtn.Font = Enum.Font.SourceSans
+                quickBtn.Text = point.Name
+                quickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+                quickBtn.TextSize = 11
+                quickBtn.TextWrapped = true
+                
+                quickBtn.MouseButton1Click:Connect(function()
+                    CurrentPointIndex = i
+                    teleportToPoint(i)
+                end)
+                
+                yOffset = yOffset + 35
+            end
+        end
+        
+        QuickFrame.Size = UDim2.new(0, 100, 0, yOffset + 5)
+    end
+    
+    -- Обновление при изменении точек
+    local connection
+    connection = game:GetService("RunService").RenderStepped:Connect(function()
+        updateQuickButtons()
+    end)
+    
+    return QuickFrame, connection
+end
+
+-- Создаем быстрый доступ (по желанию, можно закомментировать)
+-- local quickFrame, quickConnection = createQuickAccessButtons()
+
+[Метка: SWILL-COMPLETE]
